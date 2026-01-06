@@ -14,5 +14,5 @@ Egy mikroszerviz architektúrájú időjárás dashboard alkalmazás, amely megf
 
 ### 1. Klónozás
 ```bash
-git clone 
+git clone https://github.com/RedLeader01/Weather-Dashboard
 cd weather-dashboard
