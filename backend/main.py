@@ -1,296 +1,322 @@
 """
-🌤️ Időjárás Dashboard Backend - FastAPI
-Egyszerű, de teljes értékű mikroszerviz
+🌤️ Weather Dashboard Backend - FastAPI
+Egyszerűsített, scheduler külön fájlban
 """
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, func
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 import requests
-import schedule
-import threading
-import time
-import os
-from dotenv import load_dotenv
 import logging
+from typing import List, Optional
 
-# 1. Konfiguráció betöltése
-load_dotenv()
-API_KEY = os.getenv("OPENWEATHER_API_KEY", "demo_key")  # Demo key teszteléshez
-BASE_URL = "https://api.openweathermap.org/data/2.5"
+# Saját modulok importálása
+from .config import config
+from .scheduler import scheduler
+
+# 1. Logging beállítás
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # 2. Adatbázis beállítás
-DATABASE_URL = "sqlite:///./weather.db"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    config.DATABASE_URL,
+    connect_args={"check_same_thread": False} if "sqlite" in config.DATABASE_URL else {}
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 # 3. Adatmodell (OOP)
 class WeatherRecord(Base):
-    """Időjárás rekord tábla"""
+    """Időjárás rekord modell"""
     __tablename__ = "weather"
     
     id = Column(Integer, primary_key=True, index=True)
     city = Column(String, index=True)
-    temperature = Column(Float)  # Celsius
-    humidity = Column(Integer)   # %
+    temperature = Column(Float)
+    humidity = Column(Integer)
+    pressure = Column(Integer, nullable=True)
+    wind_speed = Column(Float, nullable=True)
     description = Column(String)
+    icon = Column(String, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
 # Tábla létrehozása
 Base.metadata.create_all(bind=engine)
 
-# 4. Pydantic modellek (validáció)
+# 4. Pydantic modellek
 class WeatherResponse(BaseModel):
-    """API válasz formátuma"""
+    """API válasz séma"""
     city: str
     temperature: float
     humidity: int
+    pressure: Optional[int] = None
+    wind_speed: Optional[float] = None
     description: str
+    icon: Optional[str] = None
     timestamp: datetime
     
     class Config:
         from_attributes = True
 
-class WeatherRequest(BaseModel):
-    """API kérés formátuma"""
+class WeatherStats(BaseModel):
+    """Statisztika séma"""
     city: str
+    avg_temperature: float
+    min_temperature: float
+    max_temperature: float
+    avg_humidity: float
+    record_count: int
+    last_update: Optional[datetime] = None
 
-# 5. FastAPI alkalmazás
-app = FastAPI(title="Weather API", version="1.0")
-
-# CORS engedélyezése
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# 6. Helper függvények (Funkcionális programozás)
+# 5. Helper függvények (Funkcionális)
 def kelvin_to_celsius(kelvin: float) -> float:
-    """Kelvinből Celsiusba konvertálás - tiszta függvény"""
-    return round(kelvin - 273.15, 1)
+    """Kelvin → Celsius konverzió"""
+    return round(kelvin - 273.15, 2)
 
-def get_weather_description(code: str) -> str:
-    """Időjárás kód magyar leírása"""
-    descriptions = {
-        "01d": "tiszta nap", "01n": "tiszta éjszaka",
-        "02d": "kevés felhő", "02n": "kevés felhő",
-        "03d": "szétszórt felhők", "03n": "szétszórt felhők",
-        "04d": "felhős", "04n": "felhős",
-        "09d": "zápor", "09n": "zápor",
-        "10d": "eső", "10n": "eső",
-        "11d": "zivatar", "11n": "zivatar",
-        "13d": "hó", "13n": "hó",
-        "50d": "köd", "50n": "köd"
-    }
-    return descriptions.get(code, "ismeretlen")
+def get_db():
+    """Adatbázis session dependency"""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 def fetch_weather_from_api(city: str):
-    """Időjárás lekérdezése OpenWeather-től"""
+    """Időjárás lekérdezése OpenWeather API-ról"""
     try:
+        logger.info(f"API hívás: {city}")
+        
         response = requests.get(
-            f"{BASE_URL}/weather",
-            params={"q": city, "appid": API_KEY, "lang": "hu"}
+            "https://api.openweathermap.org/data/2.5/weather",
+            params={
+                "q": city,
+                "appid": config.OPENWEATHER_API_KEY,
+                "lang": "hu",
+                "units": "metric"  # Már metric-ben kérjük
+            },
+            timeout=10
         )
         
         if response.status_code == 200:
             data = response.json()
             return {
                 "city": data["name"],
-                "temperature": kelvin_to_celsius(data["main"]["temp"]),
+                "temperature": data["main"]["temp"],  # Már Celsiusban
                 "humidity": data["main"]["humidity"],
+                "pressure": data["main"]["pressure"],
+                "wind_speed": data["wind"]["speed"],
                 "description": data["weather"][0]["description"],
                 "icon": data["weather"][0]["icon"]
             }
+        else:
+            logger.error(f"API hiba ({response.status_code}): {city}")
+            
     except Exception as e:
-        print(f"Hiba API hívásnál: {e}")
+        logger.error(f"Hiba API hívásnál ({city}): {e}")
+    
     return None
 
-# 7. Adatbázis műveletek (CRUD - Procedurális)
-def save_weather_to_db(city: str, temp: float, humidity: int, desc: str):
-    """Időjárás mentése adatbázisba"""
-    db = SessionLocal()
-    try:
-        record = WeatherRecord(
-            city=city,
-            temperature=temp,
-            humidity=humidity,
-            description=desc
-        )
-        db.add(record)
-        db.commit()
-        return record
-    finally:
-        db.close()
+def save_weather_to_db(db: Session, weather_data: dict):
+    """Időjárás adat mentése adatbázisba"""
+    record = WeatherRecord(**weather_data)
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
 
-def get_latest_weather(city: str):
-    """Legutóbbi időjárás adat"""
-    db = SessionLocal()
-    try:
-        return db.query(WeatherRecord)\
-                 .filter(WeatherRecord.city == city)\
-                 .order_by(WeatherRecord.timestamp.desc())\
-                 .first()
-    finally:
-        db.close()
+# 6. CRUD műveletek (Procedurális)
+def get_latest_weather(db: Session, city: str):
+    """Legfrissebb időjárás adat"""
+    return db.query(WeatherRecord)\
+             .filter(WeatherRecord.city == city)\
+             .order_by(WeatherRecord.timestamp.desc())\
+             .first()
 
-def get_weather_history(city: str, limit: int = 10):
+def get_weather_history(db: Session, city: str, limit: int = 10):
     """Időjárás előzmények"""
-    db = SessionLocal()
-    try:
-        return db.query(WeatherRecord)\
-                 .filter(WeatherRecord.city == city)\
-                 .order_by(WeatherRecord.timestamp.desc())\
-                 .limit(limit)\
-                 .all()
-    finally:
-        db.close()
+    return db.query(WeatherRecord)\
+             .filter(WeatherRecord.city == city)\
+             .order_by(WeatherRecord.timestamp.desc())\
+             .limit(limit)\
+             .all()
 
-def get_weather_stats(city: str, hours: int = 24):
+def get_weather_stats(db: Session, city: str, hours: int = 24):
     """Statisztikák számítása"""
-    db = SessionLocal()
-    try:
-        time_limit = datetime.utcnow() - timedelta(hours=hours)
-        
-        stats = db.query(
-            func.count(WeatherRecord.id).label('count'),
-            func.avg(WeatherRecord.temperature).label('avg_temp'),
-            func.min(WeatherRecord.temperature).label('min_temp'),
-            func.max(WeatherRecord.temperature).label('max_temp')
-        ).filter(
-            WeatherRecord.city == city,
-            WeatherRecord.timestamp >= time_limit
-        ).first()
-        
-        if stats and stats.count > 0:
-            return {
-                "city": city,
-                "avg_temperature": round(stats.avg_temp, 1),
-                "min_temperature": stats.min_temp,
-                "max_temperature": stats.max_temp,
-                "record_count": stats.count
-            }
-    finally:
-        db.close()
-    return None
+    time_limit = datetime.utcnow() - timedelta(hours=hours)
+    
+    result = db.query(
+        func.count(WeatherRecord.id).label('count'),
+        func.avg(WeatherRecord.temperature).label('avg_temp'),
+        func.min(WeatherRecord.temperature).label('min_temp'),
+        func.max(WeatherRecord.temperature).label('max_temp'),
+        func.avg(WeatherRecord.humidity).label('avg_humidity'),
+        func.max(WeatherRecord.timestamp).label('last_update')
+    ).filter(
+        WeatherRecord.city == city,
+        WeatherRecord.timestamp >= time_limit
+    ).first()
+    
+    if not result or result.count == 0:
+        return None
+    
+    return WeatherStats(
+        city=city,
+        avg_temperature=round(result.avg_temp, 1),
+        min_temperature=result.min_temp,
+        max_temperature=result.max_temp,
+        avg_humidity=round(result.avg_humidity, 1),
+        record_count=result.count,
+        last_update=result.last_update
+    )
 
-# 8. Időzített feladat (Automatizálás)
-def scheduled_weather_update():
-    """Automatikus adatgyűjtés"""
-    cities = ["Budapest", "Debrecen", "Szeged", "Pécs", "Győr"]
-    print(f"[{datetime.now()}] Automatikus adatgyűjtés indult...")
-    
-    for city in cities:
-        weather = fetch_weather_from_api(city)
-        if weather:
-            save_weather_to_db(
-                city=weather["city"],
-                temp=weather["temperature"],
-                humidity=weather["humidity"],
-                desc=weather["description"]
-            )
-            print(f"  ✓ {city} adatai mentve")
-    
-    print(f"[{datetime.now()}] Automatikus adatgyűjtés befejezve")
+def get_all_cities(db: Session):
+    """Összes város listázása"""
+    cities = db.query(WeatherRecord.city).distinct().all()
+    return [city[0] for city in cities]
 
-def start_scheduler():
-    """Ütemező indítása külön szálon"""
-    # Azonnali futás
-    scheduled_weather_update()
-    
-    # Ütemezés minden 30 percben
-    schedule.every(30).minutes.do(scheduled_weather_update)
-    
-    def run_scheduler():
-        while True:
-            schedule.run_pending()
-            time.sleep(60)  # Minden percben ellenőriz
-    
-    thread = threading.Thread(target=run_scheduler, daemon=True)
-    thread.start()
-    print("✅ Ütemező elindítva (30 percenként)")
+# 7. FastAPI alkalmazás
+app = FastAPI(
+    title="Weather Dashboard API",
+    version="2.0",
+    description="Időjárás adatok REST API"
+)
 
-# 9. API végpontok
+# CORS beállítás
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Minden domain engedélyezve
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 8. API végpontok
 @app.get("/")
 def root():
     """Főoldal"""
     return {
-        "message": "🌤️ Weather Dashboard API",
-        "version": "1.0",
+        "service": "Weather Dashboard API",
+        "version": "2.0",
+        "status": "running",
+        "scheduler": "active" if scheduler.is_running else "inactive",
         "endpoints": {
-            "current": "/api/weather?city=Budapest",
-            "history": "/api/weather/history?city=Budapest&limit=10",
-            "stats": "/api/weather/stats?city=Budapest&hours=24",
-            "cities": "/api/cities"
+            "docs": "/docs",
+            "health": "/health",
+            "weather": "/api/weather?city=Budapest",
+            "history": "/api/weather/history?city=Budapest",
+            "stats": "/api/weather/stats?city=Budapest",
+            "cities": "/api/cities",
+            "refresh": "/api/refresh"
         }
     }
 
-@app.get("/api/weather")
-def get_current_weather(city: str = Query("Budapest")):
-    """Aktuális időjárás"""
-    # 1. Először próbáljuk az adatbázisból
-    db_record = get_latest_weather(city)
-    
-    # 2. Ha nincs vagy régi (>5 perces), kérjük API-ból
-    if not db_record or (datetime.utcnow() - db_record.timestamp).seconds > 300:
-        api_weather = fetch_weather_from_api(city)
-        if api_weather:
-            # Mentjük adatbázisba
-            record = save_weather_to_db(
-                city=api_weather["city"],
-                temp=api_weather["temperature"],
-                humidity=api_weather["humidity"],
-                desc=api_weather["description"]
-            )
-            return WeatherResponse.from_orm(record)
-    
-    if db_record:
-        return WeatherResponse.from_orm(db_record)
-    
-    raise HTTPException(status_code=404, detail=f"Nem található időjárás adat: {city}")
+@app.get("/health")
+def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow(),
+        "database": "connected",
+        "scheduler": scheduler.is_running
+    }
 
-@app.get("/api/weather/history")
-def get_history(city: str = Query("Budapest"), limit: int = Query(10, ge=1, le=50)):
-    """Előzmények"""
-    records = get_weather_history(city, limit)
+@app.get("/api/weather", response_model=WeatherResponse)
+def get_current_weather(
+    city: str = Query("Budapest", description="Város neve"),
+    db: Session = Depends(get_db)
+):
+    """Aktuális időjárás"""
+    # Ellenőrizzük, van-e friss adat
+    record = get_latest_weather(db, city)
+    
+    # Ha nincs vagy régi (>10 perc), frissítünk
+    if not record or (datetime.utcnow() - record.timestamp).seconds > 600:
+        logger.info(f"Friss adat szükséges: {city}")
+        weather_data = fetch_weather_from_api(city)
+        
+        if not weather_data:
+            if record:
+                return WeatherResponse.from_orm(record)  # Régi adatot visszaadunk
+            raise HTTPException(404, f"Nem található időjárás adat: {city}")
+        
+        # Új rekord mentése
+        record = save_weather_to_db(db, weather_data)
+    
+    return WeatherResponse.from_orm(record)
+
+@app.get("/api/weather/history", response_model=List[WeatherResponse])
+def get_history(
+    city: str = Query("Budapest"),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """Időjárás előzmények"""
+    records = get_weather_history(db, city, limit)
     return [WeatherResponse.from_orm(record) for record in records]
 
-@app.get("/api/weather/stats")
-def get_stats(city: str = Query("Budapest"), hours: int = Query(24, ge=1, le=168)):
+@app.get("/api/weather/stats", response_model=WeatherStats)
+def get_stats(
+    city: str = Query("Budapest"),
+    hours: int = Query(24, ge=1, le=720),  # Max 30 nap
+    db: Session = Depends(get_db)
+):
     """Statisztikák"""
-    stats = get_weather_stats(city, hours)
+    stats = get_weather_stats(db, city, hours)
     if not stats:
-        raise HTTPException(status_code=404, detail="Nincs elég adat a statisztikákhoz")
+        raise HTTPException(404, f"Nincs elég adat {city} városhoz az elmúlt {hours} órában")
     return stats
 
 @app.get("/api/cities")
-def get_cities():
+def get_cities(db: Session = Depends(get_db)):
     """Összes város"""
-    db = SessionLocal()
-    try:
-        cities = db.query(WeatherRecord.city).distinct().all()
-        return {"cities": [city[0] for city in cities]}
-    finally:
-        db.close()
+    return {"cities": get_all_cities(db)}
 
-@app.post("/api/weather/refresh")
+@app.post("/api/refresh")
 def refresh_weather():
     """Manuális frissítés"""
-    scheduled_weather_update()
-    return {"message": "Adatok frissítve"}
+    scheduler.manual_refresh()
+    return {"message": "Manuális frissítés elindítva"}
 
-# 10. Alkalmazás indítása
+@app.get("/api/config")
+def get_config():
+    """Konfiguráció lekérdezése (csak olvasható információk)"""
+    return {
+        "schedule_interval": config.SCHEDULE_INTERVAL,
+        "default_cities": config.DEFAULT_CITIES,
+        "scheduler_status": "active" if scheduler.is_running else "inactive"
+    }
+
+# 9. Alkalmazás indítás/leállítás
 @app.on_event("startup")
-def on_startup():
+def startup_event():
     """Alkalmazás indításakor"""
-    print("🚀 Weather API elindult")
-    start_scheduler()
+    logger.info("🚀 Weather API elindul...")
+    
+    # Konfiguráció validálása
+    if config.validate():
+        logger.info("✅ Konfiguráció OK")
+        
+        # Scheduler indítása
+        scheduler.start()
+        logger.info("⏰ Scheduler elindítva")
+    else:
+        logger.warning("⚠️  Alkalmazás indult, de konfiguráció hiányos")
 
+@app.on_event("shutdown")
+def shutdown_event():
+    """Alkalmazás leállításakor"""
+    logger.info("🛑 Alkalmazás leállítása...")
+    scheduler.stop()
+    logger.info("✅ Scheduler leállítva")
+
+# 10. Futtatás
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
