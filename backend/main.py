@@ -1,6 +1,5 @@
 """
-🌤️ Weather Dashboard Backend - FastAPI
-Egyszerűsített, scheduler külön fájlban
+🌤️ Weather Dashboard Backend - CIRCULAR IMPORT JAVÍTVA
 """
 from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,9 +12,15 @@ import requests
 import logging
 from typing import List, Optional
 
-# Saját modulok importálása
-from .config import config
-from .scheduler import scheduler
+# 🔧 ABSZOLÚT IMPORTOK - MÓDOSÍTVA
+try:
+    # Először próbáljuk a relatív importot
+    from .config import config
+    from .scheduler import WeatherScheduler 
+except ImportError:
+    # Ha nem működik, használjunk abszolút importot
+    from config import config
+    from scheduler import WeatherScheduler
 
 # 1. Logging beállítás
 logging.basicConfig(
@@ -32,7 +37,7 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# 3. Adatmodell (OOP)
+# 3. Adatmodell
 class WeatherRecord(Base):
     """Időjárás rekord modell"""
     __tablename__ = "weather"
@@ -75,7 +80,7 @@ class WeatherStats(BaseModel):
     record_count: int
     last_update: Optional[datetime] = None
 
-# 5. Helper függvények (Funkcionális)
+# 5. Helper függvények
 def kelvin_to_celsius(kelvin: float) -> float:
     """Kelvin → Celsius konverzió"""
     return round(kelvin - 273.15, 2)
@@ -99,7 +104,7 @@ def fetch_weather_from_api(city: str):
                 "q": city,
                 "appid": config.OPENWEATHER_API_KEY,
                 "lang": "hu",
-                "units": "metric"  # Már metric-ben kérjük
+                "units": "metric"
             },
             timeout=10
         )
@@ -108,12 +113,13 @@ def fetch_weather_from_api(city: str):
             data = response.json()
             return {
                 "city": data["name"],
-                "temperature": data["main"]["temp"],  # Már Celsiusban
+                "temperature": data["main"]["temp"],
                 "humidity": data["main"]["humidity"],
                 "pressure": data["main"]["pressure"],
                 "wind_speed": data["wind"]["speed"],
                 "description": data["weather"][0]["description"],
-                "icon": data["weather"][0]["icon"]
+                "icon": data["weather"][0]["icon"],
+                "timestamp": datetime.utcnow()
             }
         else:
             logger.error(f"API hiba ({response.status_code}): {city}")
@@ -123,15 +129,28 @@ def fetch_weather_from_api(city: str):
     
     return None
 
-def save_weather_to_db(db: Session, weather_data: dict):
+def save_weather_to_db(weather_data: dict):
     """Időjárás adat mentése adatbázisba"""
-    record = WeatherRecord(**weather_data)
-    db.add(record)
-    db.commit()
-    db.refresh(record)
-    return record
+    db = SessionLocal()
+    try:
+        record = WeatherRecord(**weather_data)
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        return True
+    except Exception as e:
+        logger.error(f"Hiba mentéskor: {e}")
+        return False
+    finally:
+        db.close()
 
-# 6. CRUD műveletek (Procedurális)
+# 6. Scheduler létrehozása és konfigurálása
+scheduler = WeatherScheduler(
+    fetch_weather_func=fetch_weather_from_api,
+    save_weather_func=save_weather_to_db
+)
+
+# 7. CRUD műveletek
 def get_latest_weather(db: Session, city: str):
     """Legfrissebb időjárás adat"""
     return db.query(WeatherRecord)\
@@ -181,7 +200,7 @@ def get_all_cities(db: Session):
     cities = db.query(WeatherRecord.city).distinct().all()
     return [city[0] for city in cities]
 
-# 7. FastAPI alkalmazás
+# 8. FastAPI alkalmazás
 app = FastAPI(
     title="Weather Dashboard API",
     version="2.0",
@@ -191,13 +210,13 @@ app = FastAPI(
 # CORS beállítás
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Minden domain engedélyezve
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 8. API végpontok
+# 9. API végpontok
 @app.get("/")
 def root():
     """Főoldal"""
@@ -212,8 +231,7 @@ def root():
             "weather": "/api/weather?city=Budapest",
             "history": "/api/weather/history?city=Budapest",
             "stats": "/api/weather/stats?city=Budapest",
-            "cities": "/api/cities",
-            "refresh": "/api/refresh"
+            "cities": "/api/cities"
         }
     }
 
@@ -243,11 +261,13 @@ def get_current_weather(
         
         if not weather_data:
             if record:
-                return WeatherResponse.from_orm(record)  # Régi adatot visszaadunk
+                return WeatherResponse.from_orm(record)
             raise HTTPException(404, f"Nem található időjárás adat: {city}")
         
         # Új rekord mentése
-        record = save_weather_to_db(db, weather_data)
+        save_weather_to_db(weather_data)
+        # Újra lekérjük
+        record = get_latest_weather(db, city)
     
     return WeatherResponse.from_orm(record)
 
@@ -264,7 +284,7 @@ def get_history(
 @app.get("/api/weather/stats", response_model=WeatherStats)
 def get_stats(
     city: str = Query("Budapest"),
-    hours: int = Query(24, ge=1, le=720),  # Max 30 nap
+    hours: int = Query(24, ge=1, le=720),
     db: Session = Depends(get_db)
 ):
     """Statisztikák"""
@@ -286,14 +306,14 @@ def refresh_weather():
 
 @app.get("/api/config")
 def get_config():
-    """Konfiguráció lekérdezése (csak olvasható információk)"""
+    """Konfiguráció lekérdezése"""
     return {
         "schedule_interval": config.SCHEDULE_INTERVAL,
         "default_cities": config.DEFAULT_CITIES,
         "scheduler_status": "active" if scheduler.is_running else "inactive"
     }
 
-# 9. Alkalmazás indítás/leállítás
+# 10. Alkalmazás indítás/leállítás
 @app.on_event("startup")
 def startup_event():
     """Alkalmazás indításakor"""
@@ -304,7 +324,7 @@ def startup_event():
         logger.info("✅ Konfiguráció OK")
         
         # Scheduler indítása
-        scheduler.start()
+        scheduler.start(config.SCHEDULE_INTERVAL)
         logger.info("⏰ Scheduler elindítva")
     else:
         logger.warning("⚠️  Alkalmazás indult, de konfiguráció hiányos")
@@ -316,7 +336,7 @@ def shutdown_event():
     scheduler.stop()
     logger.info("✅ Scheduler leállítva")
 
-# 10. Futtatás
+# 11. Futtatás
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
