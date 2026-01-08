@@ -1,10 +1,17 @@
-# 🌤️ Weather Dashboard
+# 🌤️ Weather Dashboard v2.1
 
-## 📋 Projekt Leírás
-Egy teljes értékű időjárás dashboard mikroszerviz architektúrával.
+Egy teljes értékű időjárás dashboard mikroszerviz architektúrával, 7 napos előrejelzéssel.
+
+## 📋 Újdonságok v2.1
+
+### 🌤️ 7 Napos Időjárás Előrejelzés
+- **Napi előrejelzés kártyák**: Minden nap külön kártyán
+- **Interaktív diagramok**: Hőmérséklet, páratartalom, csapadék
+- **Részletes táblázat**: Minden adat egy helyen
+- **Exportálás**: CSV formátumban letölthető
 
 ## 🏗️ Architektúra
-- **Backend**: FastAPI REST API
+- **Backend**: FastAPI REST API (Python)
 - **Frontend**: Streamlit webes felület
 - **Adatbázis**: SQLite/PostgreSQL
 - **Ütemező**: Automatikus adatfrissítés
@@ -13,5 +20,5 @@ Egy teljes értékű időjárás dashboard mikroszerviz architektúrával.
 
 ### 1. Klónozás
 ```bash
-git clone https://github.com/RedLeader01/Weather-Dashboard.git
-cd Weather-Dashboard
+git clone https://github.com/felhasznalo/weather-dashboard.git
+cd weather-dashboard

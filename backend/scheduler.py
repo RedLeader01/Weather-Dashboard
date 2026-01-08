@@ -17,7 +17,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 class WeatherScheduler:
-    """Időzített feladatok - módosítva, nincs circular import"""
+    """Időzített feladatok"""
     
     def __init__(self, fetch_weather_func=None, save_weather_func=None):
         """

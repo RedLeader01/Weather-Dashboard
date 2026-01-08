@@ -1,5 +1,5 @@
 """
-🌤️ Weather Dashboard Backend
+🌤️ Weather Dashboard Backend - 7 NAPOS ELŐREJELZÉSSEL KIBŐVÍTVE
 """
 from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,15 +10,14 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 import requests
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict
+import math
 
-# 🔧 ABSZOLÚT IMPORTOK - MÓDOSÍTVA
+# Abszolút importok
 try:
-    # Először próbáljuk a relatív importot
     from .config import config
     from .scheduler import WeatherScheduler 
 except ImportError:
-    # Ha nem működik, használjunk abszolút importot
     from config import config
     from scheduler import WeatherScheduler
 
@@ -80,6 +79,30 @@ class WeatherStats(BaseModel):
     record_count: int
     last_update: Optional[datetime] = None
 
+class DailyForecast(BaseModel):
+    """Napi előrejelzés séma"""
+    date: str
+    day_temp: float
+    night_temp: float
+    min_temp: float
+    max_temp: float
+    humidity: int
+    pressure: int
+    wind_speed: float
+    description: str
+    icon: str
+    pop: float  # Precipitation probability - csapadék valószínűség
+    
+    class Config:
+        from_attributes = True
+
+class ForecastResponse(BaseModel):
+    """Előrejelzés válasz séma"""
+    city: str
+    country: str
+    forecasts: List[DailyForecast]
+    last_update: datetime
+
 # 5. Helper függvények
 def kelvin_to_celsius(kelvin: float) -> float:
     """Kelvin → Celsius konverzió"""
@@ -128,6 +151,121 @@ def fetch_weather_from_api(city: str):
         logger.error(f"Hiba API hívásnál ({city}): {e}")
     
     return None
+
+def fetch_forecast_from_api(city: str):
+    """7 napos előrejelzés lekérdezése OpenWeather API-ról"""
+    try:
+        logger.info(f"Előrejelzés API hívás: {city}")
+        
+        # OpenWeather 5 napos/3 órás előrejelzés
+        response = requests.get(
+            "https://api.openweathermap.org/data/2.5/forecast",
+            params={
+                "q": city,
+                "appid": config.OPENWEATHER_API_KEY,
+                "lang": "hu",
+                "units": "metric",
+                "cnt": 40  # 5 nap * 8 mérés/nap = 40
+            },
+            timeout=15
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            return process_forecast_data(data)
+        else:
+            logger.error(f"Előrejelzés API hiba ({response.status_code}): {city}")
+            
+    except Exception as e:
+        logger.error(f"Hiba előrejelzés API hívásnál ({city}): {e}")
+    
+    return None
+
+def process_forecast_data(data: dict):
+    """API adatok feldolgozása napi előrejelzésekké (7 napra)"""
+    try:
+        city = data["city"]["name"]
+        country = data["city"]["country"]
+        
+        # Csoportosítás dátum szerint
+        daily_data = {}
+        
+        for forecast in data["list"]:
+            # Konvertálás UTC időből
+            dt = datetime.fromtimestamp(forecast["dt"])
+            date_str = dt.strftime("%Y-%m-%d")
+            hour = dt.hour
+            
+            if date_str not in daily_data:
+                daily_data[date_str] = {
+                    "day_temps": [],   # 9-18 óra
+                    "night_temps": [], # 21-6 óra
+                    "temps": [],
+                    "humidities": [],
+                    "pressures": [],
+                    "wind_speeds": [],
+                    "descriptions": [],
+                    "icons": [],
+                    "pops": []
+                }
+            
+            daily_data[date_str]["temps"].append(forecast["main"]["temp"])
+            daily_data[date_str]["humidities"].append(forecast["main"]["humidity"])
+            daily_data[date_str]["pressures"].append(forecast["main"]["pressure"])
+            daily_data[date_str]["wind_speeds"].append(forecast["wind"]["speed"])
+            daily_data[date_str]["descriptions"].append(forecast["weather"][0]["description"])
+            daily_data[date_str]["icons"].append(forecast["weather"][0]["icon"])
+            daily_data[date_str]["pops"].append(forecast.get("pop", 0))
+            
+            # Nappali/éjszakai hőmérséklet elkülönítése
+            if 9 <= hour <= 18:
+                daily_data[date_str]["day_temps"].append(forecast["main"]["temp"])
+            elif hour <= 6 or hour >= 21:
+                daily_data[date_str]["night_temps"].append(forecast["main"]["temp"])
+        
+        # Napi előrejelzések létrehozása
+        forecasts = []
+        today = datetime.now().strftime("%Y-%m-%d")
+        
+        # Csak jövőbeli napok (ma és utána)
+        future_dates = [date for date in daily_data.keys() if date >= today]
+        future_dates.sort()
+        
+        for date_str in future_dates[:7]:  # Maximum 7 nap
+            values = daily_data[date_str]
+            
+            # Ha nincs nappali/éjszakai adat, használjuk az átlagot
+            avg_day_temp = sum(values["day_temps"])/len(values["day_temps"]) if values["day_temps"] else sum(values["temps"])/len(values["temps"])
+            avg_night_temp = sum(values["night_temps"])/len(values["night_temps"]) if values["night_temps"] else sum(values["temps"])/len(values["temps"])
+            
+            # Leggyakorbbi leírás és ikon
+            most_common_desc = max(set(values["descriptions"]), key=values["descriptions"].count)
+            most_common_icon = max(set(values["icons"]), key=values["icons"].count)
+            
+            forecasts.append(DailyForecast(
+                date=date_str,
+                day_temp=round(avg_day_temp, 1),
+                night_temp=round(avg_night_temp, 1),
+                min_temp=round(min(values["temps"]), 1),
+                max_temp=round(max(values["temps"]), 1),
+                humidity=round(sum(values["humidities"])/len(values["humidities"])),
+                pressure=round(sum(values["pressures"])/len(values["pressures"])),
+                wind_speed=round(sum(values["wind_speeds"])/len(values["wind_speeds"]), 1),
+                description=most_common_desc,
+                icon=most_common_icon,
+                pop=round(max(values["pops"]) * 100)  # Százalékban
+            ))
+        
+        return ForecastResponse(
+            city=city,
+            country=country,
+            forecasts=forecasts,
+            last_update=datetime.utcnow()
+        )
+        
+    except Exception as e:
+        logger.error(f"Hiba előrejelzés feldolgozásánál: {e}")
+        return None
 
 def save_weather_to_db(weather_data: dict):
     """Időjárás adat mentése adatbázisba"""
@@ -203,8 +341,8 @@ def get_all_cities(db: Session):
 # 8. FastAPI alkalmazás
 app = FastAPI(
     title="Weather Dashboard API",
-    version="2.0",
-    description="Időjárás adatok REST API"
+    version="2.1",
+    description="Időjárás adatok REST API - 7 napos előrejelzéssel"
 )
 
 # CORS beállítás
@@ -222,8 +360,9 @@ def root():
     """Főoldal"""
     return {
         "service": "Weather Dashboard API",
-        "version": "2.0",
+        "version": "2.1",
         "status": "running",
+        "features": ["current", "history", "stats", "7-day-forecast"],
         "scheduler": "active" if scheduler.is_running else "inactive",
         "endpoints": {
             "docs": "/docs",
@@ -231,6 +370,7 @@ def root():
             "weather": "/api/weather?city=Budapest",
             "history": "/api/weather/history?city=Budapest",
             "stats": "/api/weather/stats?city=Budapest",
+            "forecast": "/api/forecast?city=Budapest&days=7",
             "cities": "/api/cities"
         }
     }
@@ -242,7 +382,8 @@ def health_check():
         "status": "healthy",
         "timestamp": datetime.utcnow(),
         "database": "connected",
-        "scheduler": scheduler.is_running
+        "scheduler": scheduler.is_running,
+        "openweather_api": "configured" if config.OPENWEATHER_API_KEY and config.OPENWEATHER_API_KEY != "your_api_key_here" else "not_configured"
     }
 
 @app.get("/api/weather", response_model=WeatherResponse)
@@ -293,6 +434,27 @@ def get_stats(
         raise HTTPException(404, f"Nincs elég adat {city} városhoz az elmúlt {hours} órában")
     return stats
 
+@app.get("/api/forecast", response_model=ForecastResponse)
+def get_weather_forecast(
+    city: str = Query("Budapest", description="Város neve"),
+    days: int = Query(7, ge=1, le=7, description="Napok száma (1-7)")
+):
+    """7 napos időjárás előrejelzés"""
+    # Ellenőrizzük az API kulcsot
+    if not config.OPENWEATHER_API_KEY or config.OPENWEATHER_API_KEY == "your_api_key_here":
+        raise HTTPException(500, "OpenWeather API kulcs nincs beállítva")
+    
+    forecast_data = fetch_forecast_from_api(city)
+    
+    if not forecast_data:
+        raise HTTPException(404, f"Nem található előrejelzés: {city}")
+    
+    # Limitáljuk a napok számát
+    if days < len(forecast_data.forecasts):
+        forecast_data.forecasts = forecast_data.forecasts[:days]
+    
+    return forecast_data
+
 @app.get("/api/cities")
 def get_cities(db: Session = Depends(get_db)):
     """Összes város"""
@@ -310,7 +472,8 @@ def get_config():
     return {
         "schedule_interval": config.SCHEDULE_INTERVAL,
         "default_cities": config.DEFAULT_CITIES,
-        "scheduler_status": "active" if scheduler.is_running else "inactive"
+        "scheduler_status": "active" if scheduler.is_running else "inactive",
+        "openweather_configured": config.OPENWEATHER_API_KEY != "your_api_key_here"
     }
 
 # 10. Alkalmazás indítás/leállítás
