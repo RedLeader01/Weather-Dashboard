@@ -1,313 +1,262 @@
 """
-🌤️ Weather Dashboard Frontend - API URL változtatható
+🌤️ Weather Dashboard Frontend - JAVÍTOTT Oldalváltással
 """
 import streamlit as st
 import requests
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 from datetime import datetime
 import time
-import json
+import webbrowser
 
-# Alapértelmezett konfiguráció
-DEFAULT_CONFIG = {
-    "api_url": "http://localhost:8000",
-    "cities": ["Budapest", "Debrecen", "Szeged", "Pécs", "Győr", "Miskolc"],
-    "theme": "light"
-}
+# ============================================
+# 1. KONFIGURÁCIÓ
+# ============================================
 
-class WeatherApp:
-    """Időjárás alkalmazás osztály"""
-    
-    def __init__(self):
-        self.init_session_state()
+st.set_page_config(
+    page_title="Időjárás Dashboard",
+    page_icon="🌤️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# CSS stílusok
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        color: #1E88E5;
+        text-align: center;
+        margin-bottom: 2rem;
+        padding: 1rem;
+    }
+    .weather-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 15px;
+        padding: 25px;
+        color: white;
+        margin: 10px 0;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .stButton>button {
+        width: 100%;
+        border-radius: 8px;
+        font-weight: bold;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================
+# 2. SESSION STATE KEZELÉS
+# ============================================
+
+# Session state inicializálása
+if 'page' not in st.session_state:
+    st.session_state.page = 'current'
+if 'api_url' not in st.session_state:
+    st.session_state.api_url = 'http://localhost:8000'
+if 'last_refresh' not in st.session_state:
+    st.session_state.last_refresh = datetime.now()
+
+# ============================================
+# 3. HELPER FÜGGVÉNYEK
+# ============================================
+
+def fetch_data(endpoint, params=None):
+    """API hívás"""
+    try:
+        url = f"{st.session_state.api_url}{endpoint}"
+        response = requests.get(url, params=params, timeout=5)
+        if response.status_code == 200:
+            return response.json()
+    except:
+        return None
+    return None
+
+def format_temp(temp):
+    """Hőmérséklet formázása"""
+    return f"{temp:.1f}°C"
+
+def format_time(timestamp_str):
+    """Idő formázása"""
+    try:
+        dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+        return dt.strftime("%H:%M")
+    except:
+        return timestamp_str
+
+def get_weather_icon(icon_code):
+    """Időjárás ikon"""
+    if icon_code:
+        return f"https://openweathermap.org/img/wn/{icon_code}@2x.png"
+    return None
+
+# ============================================
+# 4. OLDALSÁV
+# ============================================
+
+def render_sidebar():
+    """Oldalsáv renderelése"""
+    with st.sidebar:
+        st.title("🌤️ Időjárás")
         
-    def init_session_state(self):
-        """Session state inicializálása"""
-        if 'api_url' not in st.session_state:
-            st.session_state.api_url = DEFAULT_CONFIG["api_url"]
-        if 'config_visible' not in st.session_state:
-            st.session_state.config_visible = False
-        if 'last_update' not in st.session_state:
-            st.session_state.last_update = None
-    
-    def fetch_data(self, endpoint, params=None):
-        """API adatok lekérése"""
-        try:
-            url = f"{st.session_state.api_url}{endpoint}"
-            
-            # Timeout és error handling
-            response = requests.get(url, params=params, timeout=5)
-            
-            if response.status_code == 200:
-                return response.json()
-            else:
-                st.error(f"API hiba ({response.status_code}): {response.text[:100]}")
-                return None
-                
-        except requests.exceptions.ConnectionError:
-            st.error(f"❌ Nem lehet csatlakozni az API-hoz: {st.session_state.api_url}")
-            return None
-        except Exception as e:
-            st.error(f"Hiba történt: {str(e)}")
-            return None
-    
-    def display_config_panel(self):
-        """Konfigurációs panel megjelenítése"""
-        with st.sidebar:
-            st.subheader("⚙️ API Konfiguráció")
-            
-            # API URL beállítása
-            new_api_url = st.text_input(
-                "API URL:",
-                value=st.session_state.api_url,
-                help="A backend API címe (pl: http://localhost:8000)"
-            )
-            
-            if new_api_url != st.session_state.api_url:
-                st.session_state.api_url = new_api_url
-                st.rerun()
-            
-            # API tesztelése
-            if st.button("🔗 API kapcsolat tesztelése"):
-                with st.spinner("Kapcsolat tesztelése..."):
-                    try:
-                        response = requests.get(f"{new_api_url}/health", timeout=3)
-                        if response.status_code == 200:
-                            st.success("✅ API elérhető!")
-                        else:
-                            st.error(f"❌ API hiba: {response.status_code}")
-                    except:
-                        st.error("❌ Nem lehet csatlakozni az API-hoz")
-            
-            # Aktuális konfiguráció
-            with st.expander("📋 Aktuális beállítások"):
-                config_info = self.fetch_data("/api/config")
-                if config_info:
-                    st.json(config_info)
-                else:
-                    st.info("API konfiguráció nem elérhető")
-            
-            st.divider()
-    
-    def display_current_weather(self):
-        """Aktuális időjárás"""
-        st.header("🌤️ Aktuális Időjárás")
+        # Navigációs gombok - EGYSZERŰ GOMBOKKAL
+        st.subheader("Navigáció")
         
-        # Város választó
-        col1, col2, col3 = st.columns([3, 1, 1])
-        with col1:
-            city = st.selectbox("Város:", DEFAULT_CONFIG["cities"], key="current_city")
+        # Aktuális gomb
+        if st.button("🏠 Aktuális időjárás", use_container_width=True):
+            st.session_state.page = 'current'
+            st.rerun()
         
-        with col2:
-            if st.button("🔄 Frissítés", use_container_width=True):
-                st.rerun()
+        # Előzmények gomb
+        if st.button("📈 Előzmények", use_container_width=True):
+            st.session_state.page = 'history'
+            st.rerun()
         
-        with col3:
-            if st.button("📊 Statisztika", use_container_width=True):
-                st.session_state.show_stats = True
+        # Statisztikák gomb
+        if st.button("📊 Statisztikák", use_container_width=True):
+            st.session_state.page = 'stats'
+            st.rerun()
         
-        # Adatok lekérése
-        data = self.fetch_data("/api/weather", {"city": city})
+        # Összehasonlítás gomb
+        if st.button("🏙️ Összehasonlítás", use_container_width=True):
+            st.session_state.page = 'comparison'
+            st.rerun()
         
-        if data:
-            # Fő kártya
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                # Hőmérséklet és leírás
-                st.markdown(f"""
-                <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                          border-radius: 15px; padding: 30px; color: white;'>
-                    <h1 style='font-size: 4rem; margin: 0;'>{data['temperature']:.1f}°C</h1>
-                    <h2 style='margin-top: 10px;'>{city}</h2>
-                    <p style='font-size: 1.5rem;'>{data['description'].capitalize()}</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                # Ikon
-                if data.get('icon'):
-                    icon_url = f"https://openweathermap.org/img/wn/{data['icon']}@4x.png"
-                    st.image(icon_url, width=150)
-            
-            # Metrikák
-            cols = st.columns(4)
-            metrics = [
-                ("💧 Páratartalom", f"{data['humidity']}%"),
-                ("🎯 Nyomás", f"{data.get('pressure', 'N/A')} hPa"),
-                ("💨 Szél", f"{data.get('wind_speed', 'N/A')} m/s"),
-                ("🕐 Frissítve", datetime.fromisoformat(
-                    data['timestamp'].replace('Z', '+00:00')
-                ).strftime("%H:%M"))
-            ]
-            
-            for col, (label, value) in zip(cols, metrics):
-                with col:
-                    st.metric(label, value)
-    
-    def display_history(self):
-        """Előzmények diagrammal"""
-        st.header("📈 Időjárás Előzmények")
+        # Beállítások gomb
+        if st.button("⚙️ Beállítások", use_container_width=True):
+            st.session_state.page = 'settings'
+            st.rerun()
         
-        col1, col2 = st.columns(2)
-        with col1:
-            city = st.selectbox("Város:", DEFAULT_CONFIG["cities"], key="history_city")
-        with col2:
-            limit = st.slider("Rekordok:", 5, 50, 20, key="history_limit")
+        st.divider()
         
-        data = self.fetch_data("/api/weather/history", {"city": city, "limit": limit})
-        
-        if data and len(data) > 0:
-            # DataFrame
-            df = pd.DataFrame(data)
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df = df.sort_values('timestamp')
-            
-            # Diagram
-            fig = go.Figure()
-            
-            fig.add_trace(go.Scatter(
-                x=df['timestamp'],
-                y=df['temperature'],
-                mode='lines+markers',
-                name='Hőmérséklet',
-                line=dict(color='#FF6B6B', width=3),
-                marker=dict(size=8)
-            ))
-            
-            fig.add_trace(go.Scatter(
-                x=df['timestamp'],
-                y=df['humidity'],
-                mode='lines',
-                name='Páratartalom',
-                yaxis='y2',
-                line=dict(color='#4ECDC4', width=2, dash='dash')
-            ))
-            
-            fig.update_layout(
-                title=f'{city} - Időjárás trend',
-                xaxis_title='Idő',
-                yaxis_title='Hőmérséklet (°C)',
-                yaxis2=dict(
-                    title='Páratartalom (%)',
-                    overlaying='y',
-                    side='right'
-                ),
-                height=500,
-                template='plotly_white',
-                hovermode='x unified'
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Részletes adatok
-            with st.expander("📋 Részletes adatok"):
-                display_df = df[['timestamp', 'temperature', 'humidity', 'description']].copy()
-                display_df['timestamp'] = display_df['timestamp'].dt.strftime('%m.%d %H:%M')
-                st.dataframe(display_df, use_container_width=True)
-    
-    def display_statistics(self):
-        """Statisztikák"""
-        st.header("📊 Statisztikák")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            city = st.selectbox("Város:", DEFAULT_CONFIG["cities"], key="stats_city")
-        with col2:
-            hours = st.selectbox(
-                "Időtartam:",
-                [6, 12, 24, 48, 72, 168],
-                index=2,
-                format_func=lambda x: f"{x} óra"
-            )
-        
-        data = self.fetch_data("/api/weather/stats", {"city": city, "hours": hours})
-        
-        if data:
-            # Metrikák
-            cols = st.columns(4)
-            metrics = [
-                ("📈 Átlag", f"{data['avg_temperature']:.1f}°C"),
-                ("📉 Minimum", f"{data['min_temperature']:.1f}°C"),
-                ("📈 Maximum", f"{data['max_temperature']:.1f}°C"),
-                ("🔢 Mérések", data['record_count'])
-            ]
-            
-            for col, (label, value) in zip(cols, metrics):
-                with col:
-                    st.metric(label, value)
-            
-            # Infobox
-            st.info(f"""
-            **Statisztikai információk:**
-            
-            - **Város:** {data['city']}
-            - **Időtartam:** utolsó {hours} óra
-            - **Összes mérés:** {data['record_count']}
-            - **Hőmérséklet tartomány:** {data['min_temperature']:.1f}°C - {data['max_temperature']:.1f}°C
-            - **Átlag páratartalom:** {data['avg_humidity']:.1f}%
-            - **Utolsó frissítés:** {data['last_update']}
-            """)
-            
-            # Diagram
-            if data['record_count'] > 1:
-                fig = go.Figure(data=[
-                    go.Bar(
-                        x=['Átlag', 'Minimum', 'Maximum'],
-                        y=[data['avg_temperature'], data['min_temperature'], data['max_temperature']],
-                        marker_color=['#4ECDC4', '#FF6B6B', '#45B7D1']
-                    )
-                ])
-                
-                fig.update_layout(
-                    title='Hőmérséklet statisztikák',
-                    yaxis_title='Hőmérséklet (°C)',
-                    height=300
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-    
-    def display_comparison(self):
-        """Városok összehasonlítása"""
-        st.header("🏙️ Városok Összehasonlítása")
-        
-        selected_cities = st.multiselect(
-            "Válassz városokat:",
-            DEFAULT_CONFIG["cities"],
-            default=DEFAULT_CONFIG["cities"][:3]
+        # API beállítások
+        st.subheader("API Beállítások")
+        new_api_url = st.text_input(
+            "Backend URL:",
+            value=st.session_state.api_url
         )
         
-        if len(selected_cities) < 2:
-            st.warning("⚠️ Válassz legalább 2 várost az összehasonlításhoz!")
-            return
+        if new_api_url != st.session_state.api_url:
+            st.session_state.api_url = new_api_url
+            st.rerun()
         
-        # Adatok gyűjtése
-        cities_data = []
-        for city in selected_cities:
-            data = self.fetch_data("/api/weather", {"city": city})
-            if data:
-                cities_data.append(data)
+        # API teszt
+        if st.button("🔗 API teszt", use_container_width=True):
+            try:
+                response = requests.get(f"{new_api_url}/health", timeout=3)
+                if response.status_code == 200:
+                    st.success("✅ API elérhető")
+                else:
+                    st.error(f"❌ API hiba: {response.status_code}")
+            except:
+                st.error("❌ API nem elérhető")
         
-        if len(cities_data) < 2:
-            st.error("❌ Nem sikerült adatot szerezni a városokhoz")
-            return
+        st.divider()
+        
+        # Manuális frissítés
+        if st.button("🔄 Adatok frissítése", use_container_width=True, type="secondary"):
+            response = fetch_data("/api/refresh")
+            if response:
+                st.success("✅ Adatok frissítve")
+            else:
+                st.error("❌ Frissítés sikertelen")
+            time.sleep(1)
+            st.rerun()
+        
+        # Információk
+        st.caption(f"Backend: {st.session_state.api_url}")
+        st.caption(f"Utolsó frissítés: {st.session_state.last_refresh.strftime('%H:%M:%S')}")
+
+# ============================================
+# 5. OLDALAK
+# ============================================
+
+def render_current_weather():
+    """Aktuális időjárás oldal"""
+    st.markdown('<h1 class="main-header">🌤️ Aktuális Időjárás</h1>', unsafe_allow_html=True)
+    
+    # Város választó
+    cities = ["Budapest", "Debrecen", "Szeged", "Pécs", "Győr", "Miskolc"]
+    city = st.selectbox("Válassz várost:", cities)
+    
+    # Adatok lekérése
+    data = fetch_data("/api/weather", {"city": city})
+    
+    if data:
+        # Fő kártya
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.markdown(f"""
+            <div class='weather-card'>
+                <h1 style='font-size: 4rem; margin: 0;'>{format_temp(data['temperature'])}</h1>
+                <h2 style='margin-top: 0;'>{city}</h2>
+                <p style='font-size: 1.5rem;'>{data['description'].capitalize()}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            if data.get('icon'):
+                icon_url = get_weather_icon(data['icon'])
+                st.image(icon_url, width=150)
+        
+        # Metrikák
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("💧 Páratartalom", f"{data['humidity']}%")
+        
+        with col2:
+            st.metric("🎯 Légnyomás", f"{data.get('pressure', 'N/A')} hPa")
+        
+        with col3:
+            st.metric("💨 Szél", f"{data.get('wind_speed', 'N/A')} m/s")
+        
+        with col4:
+            st.metric("🕐 Frissítve", format_time(data['timestamp']))
+    
+    else:
+        st.error("❌ Nem sikerült betölteni az adatokat")
+
+def render_history():
+    """Előzmények oldal"""
+    st.markdown('<h1 class="main-header">📈 Időjárás Előzmények</h1>', unsafe_allow_html=True)
+    
+    # Beállítások
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        cities = ["Budapest", "Debrecen", "Szeged", "Pécs", "Győr"]
+        city = st.selectbox("Város:", cities, key="history_city")
+    
+    with col2:
+        limit = st.slider("Rekordok száma:", 5, 50, 20, key="history_limit")
+    
+    # Adatok lekérése
+    data = fetch_data("/api/weather/history", {"city": city, "limit": limit})
+    
+    if data and len(data) > 0:
+        # DataFrame
+        df = pd.DataFrame(data)
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df = df.sort_values('timestamp')
         
         # Diagram
-        fig = go.Figure(data=[
-            go.Bar(
-                x=[d['city'] for d in cities_data],
-                y=[d['temperature'] for d in cities_data],
-                text=[f"{d['temperature']:.1f}°C" for d in cities_data],
-                textposition='auto',
-                marker_color='#95E1D3',
-                hovertemplate='<b>%{x}</b><br>Hőmérséklet: %{y:.1f}°C<br>Páratartalom: %{customdata}%<extra></extra>',
-                customdata=[d['humidity'] for d in cities_data]
-            )
-        ])
+        fig = go.Figure()
+        
+        fig.add_trace(go.Scatter(
+            x=df['timestamp'],
+            y=df['temperature'],
+            mode='lines+markers',
+            name='Hőmérséklet (°C)',
+            line=dict(color='#FF6B6B', width=3)
+        ))
         
         fig.update_layout(
-            title='Városok hőmérséklet összehasonlítása',
+            title=f'{city} - Időjárás trend',
+            xaxis_title='Idő',
             yaxis_title='Hőmérséklet (°C)',
             height=400
         )
@@ -315,126 +264,262 @@ class WeatherApp:
         st.plotly_chart(fig, use_container_width=True)
         
         # Táblázat
-        st.subheader("📋 Összehasonlító táblázat")
-        
-        comparison_data = []
-        for data in cities_data:
-            comparison_data.append({
-                'Város': data['city'],
-                'Hőmérséklet (°C)': f"{data['temperature']:.1f}",
-                'Páratartalom (%)': data['humidity'],
-                'Leírás': data['description'].capitalize(),
-                'Frissítve': datetime.fromisoformat(
-                    data['timestamp'].replace('Z', '+00:00')
-                ).strftime('%H:%M')
-            })
-        
-        df = pd.DataFrame(comparison_data)
-        st.dataframe(df, use_container_width=True)
+        with st.expander("📋 Részletes adatok"):
+            display_df = df[['timestamp', 'temperature', 'humidity', 'description']].copy()
+            display_df['timestamp'] = display_df['timestamp'].dt.strftime('%m.%d %H:%M')
+            st.dataframe(display_df, use_container_width=True)
     
-    def display_sidebar(self):
-        """Oldalsáv megjelenítése"""
-        with st.sidebar:
-            # Logo
-            st.image("https://cdn-icons-png.flaticon.com/512/1163/1163661.png", width=80)
-            st.title("🌤️ Időjárás")
+    else:
+        st.warning("⚠️ Nincs elég adat az előzményekhez")
+        st.info("""
+        **Mit tegyél:**
+        1. Várj 5 percet, hogy a scheduler gyűjtsön adatot
+        2. Nyomd meg a "🔄 Adatok frissítése" gombot az oldalsávban
+        3. Ellenőrizd, hogy a backend fut-e
+        """)
+
+def render_statistics():
+    """Statisztikák oldal"""
+    st.markdown('<h1 class="main-header">📊 Időjárás Statisztikák</h1>', unsafe_allow_html=True)
+    
+    # Beállítások
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        cities = ["Budapest", "Debrecen", "Szeged", "Pécs", "Győr"]
+        city = st.selectbox("Város:", cities, key="stats_city")
+    
+    with col2:
+        hours = st.selectbox(
+            "Időtartam:",
+            [6, 12, 24, 48, 72],
+            index=2,
+            format_func=lambda x: f"{x} óra",
+            key="stats_hours"
+        )
+    
+    # Adatok lekérése
+    data = fetch_data("/api/weather/stats", {"city": city, "hours": hours})
+    
+    if data:
+        # Metrikák
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("📈 Átlag", format_temp(data['avg_temperature']))
+        
+        with col2:
+            st.metric("📉 Minimum", format_temp(data['min_temperature']))
+        
+        with col3:
+            st.metric("📈 Maximum", format_temp(data['max_temperature']))
+        
+        with col4:
+            st.metric("🔢 Mérések", data['record_count'])
+        
+        # Infobox
+        st.info(f"""
+        **Statisztikai információk:**
+        
+        - **Város:** {data['city']}
+        - **Időtartam:** utolsó {hours} óra
+        - **Hőmérséklet tartomány:** {format_temp(data['min_temperature'])} - {format_temp(data['max_temperature'])}
+        - **Átlag páratartalom:** {data['avg_humidity']:.1f}%
+        - **Utolsó frissítés:** {format_time(data.get('last_update', ''))}
+        """)
+        
+        # Diagram
+        if data['record_count'] > 1:
+            fig = go.Figure(data=[
+                go.Bar(
+                    x=['Átlag', 'Minimum', 'Maximum'],
+                    y=[data['avg_temperature'], data['min_temperature'], data['max_temperature']],
+                    marker_color=['#4ECDC4', '#FF6B6B', '#45B7D1']
+                )
+            ])
             
-            # Navigáció
-            page = st.radio(
-                "Navigáció:",
-                ["🏠 Aktuális", "📈 Előzmények", "📊 Statisztikák", "🏙️ Összehasonlítás"],
-                index=0
+            fig.update_layout(
+                title='Hőmérséklet statisztikák',
+                yaxis_title='Hőmérséklet (°C)',
+                height=300
             )
             
-            st.divider()
-            
-            # API konfiguráció
-            self.display_config_panel()
-            
-            # Aktuális információk
-            st.caption(f"API: {st.session_state.api_url}")
-            if st.session_state.last_update:
-                st.caption(f"Utolsó frissítés: {st.session_state.last_update}")
-            
-            # Manuális frissítés gomb
-            if st.button("🔄 Összes város frissítése"):
-                response = self.fetch_data("/api/refresh")
-                if response:
-                    st.success("✅ Frissítés elindítva!")
-                    time.sleep(1)
-                    st.rerun()
+            st.plotly_chart(fig, use_container_width=True)
     
-    def run(self):
-        """Alkalmazás futtatása"""
-        # Oldalsáv
-        self.display_sidebar()
-        
-        # Fő tartalom
-        page = st.session_state.get('page', "🏠 Aktuális")
-        
-        if page == "🏠 Aktuális":
-            self.display_current_weather()
-        elif page == "📈 Előzmények":
-            self.display_history()
-        elif page == "📊 Statisztikák":
-            self.display_statistics()
-        elif page == "🏙️ Összehasonlítása":
-            self.display_comparison()
-        
-        # Footer
-        st.markdown("---")
-        col1, col2, col3 = st.columns([2, 1, 1])
-        with col1:
-            st.caption("🌤️ Weather Dashboard v2.0")
-        with col2:
-            if st.button("ℹ️ API Info"):
-                st.session_state.show_api_info = True
-        with col3:
-            if st.button("🔄 Oldal frissítése"):
-                st.rerun()
-        
-        # API info modal
-        if st.session_state.get('show_api_info'):
-            with st.expander("API Információk", expanded=True):
-                endpoints = [
-                    ("GET /", "Főoldal"),
-                    ("GET /health", "Health check"),
-                    ("GET /api/weather?city={city}", "Aktuális időjárás"),
-                    ("GET /api/weather/history?city={city}&limit={n}", "Előzmények"),
-                    ("GET /api/weather/stats?city={city}&hours={h}", "Statisztikák"),
-                    ("GET /api/cities", "Városok listája"),
-                    ("POST /api/refresh", "Manuális frissítés")
-                ]
-                
-                for endpoint, desc in endpoints:
-                    st.code(f"{st.session_state.api_url}{endpoint}", language=None)
-                    st.caption(desc)
-                    st.write("")
+    else:
+        st.error("❌ Nincs elég adat a statisztikákhoz")
 
-# Alkalmazás indítása
-if __name__ == "__main__":
-    # Oldal konfiguráció
-    st.set_page_config(
-        page_title="Időjárás Dashboard",
-        page_icon="🌤️",
-        layout="wide",
-        initial_sidebar_state="expanded"
+def render_comparison():
+    """Összehasonlítás oldal"""
+    st.markdown('<h1 class="main-header">🏙️ Városok Összehasonlítása</h1>', unsafe_allow_html=True)
+    
+    # Városok kiválasztása
+    all_cities = ["Budapest", "Debrecen", "Szeged", "Pécs", "Győr"]
+    
+    selected_cities = st.multiselect(
+        "Válassz városokat:",
+        all_cities,
+        default=["Budapest", "Debrecen", "Szeged"]
     )
     
-    # CSS stílusok
-    st.markdown("""
-    <style>
-    .main-header {
-        font-size: 2.5rem;
-        color: #1E88E5;
-        margin-bottom: 2rem;
-    }
-    .stButton button {
-        width: 100%;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    if len(selected_cities) < 2:
+        st.warning("⚠️ Válassz legalább 2 várost!")
+        return
     
-    # Alkalmazás futtatása
-    app = WeatherApp()
-    app.run()
+    # Adatok gyűjtése
+    cities_data = []
+    
+    for city in selected_cities:
+        data = fetch_data("/api/weather", {"city": city})
+        if data:
+            cities_data.append(data)
+    
+    if len(cities_data) < 2:
+        st.error("❌ Nem sikerült adatot szerezni a városokhoz")
+        return
+    
+    # Diagram
+    fig = go.Figure(data=[
+        go.Bar(
+            x=[d['city'] for d in cities_data],
+            y=[d['temperature'] for d in cities_data],
+            text=[format_temp(d['temperature']) for d in cities_data],
+            textposition='auto',
+            marker_color='#95E1D3'
+        )
+    ])
+    
+    fig.update_layout(
+        title='Városok hőmérséklet összehasonlítása',
+        yaxis_title='Hőmérséklet (°C)',
+        height=400
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Táblázat
+    st.subheader("📋 Összehasonlító táblázat")
+    
+    comparison_data = []
+    for data in cities_data:
+        comparison_data.append({
+            'Város': data['city'],
+            'Hőmérséklet (°C)': format_temp(data['temperature']),
+            'Páratartalom (%)': data['humidity'],
+            'Leírás': data['description'].capitalize(),
+            'Frissítve': format_time(data['timestamp'])
+        })
+    
+    df = pd.DataFrame(comparison_data)
+    st.dataframe(df, use_container_width=True)
+
+def render_settings():
+    """Beállítások oldal"""
+    st.markdown('<h1 class="main-header">⚙️ Beállítások</h1>', unsafe_allow_html=True)
+    
+    # API beállítások
+    st.subheader("🔌 API Konfiguráció")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        new_api_url = st.text_input(
+            "Backend URL:",
+            value=st.session_state.api_url
+        )
+        
+        if new_api_url != st.session_state.api_url:
+            st.session_state.api_url = new_api_url
+            st.success("✅ API URL frissítve!")
+            time.sleep(1)
+            st.rerun()
+    
+    with col2:
+        st.write("API állapot:")
+        try:
+            response = requests.get(f"{st.session_state.api_url}/health", timeout=3)
+            if response.status_code == 200:
+                st.success("✅ API elérhető")
+            else:
+                st.error(f"❌ API hiba: {response.status_code}")
+        except:
+            st.error("❌ API nem elérhető")
+    
+    # Adatbázis információk
+    st.subheader("🗄️ Adatbázis információk")
+    
+    data = fetch_data("/api/cities")
+    if data:
+        cities = data.get('cities', [])
+        st.write(f"**Városok az adatbázisban:** {len(cities)}")
+        st.write(", ".join(cities))
+    
+    # Rendszer információk
+    st.subheader("ℹ️ Rendszer információk")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.metric("Frontend", "Streamlit")
+        st.metric("Backend", "FastAPI")
+    
+    with col2:
+        st.metric("Adatbázis", "SQLite")
+        st.metric("Python", "3.10+")
+    
+    # Visszaállítás
+    st.subheader("🔄 Visszaállítás")
+    
+    if st.button("Alapértelmezett beállítások", type="secondary"):
+        st.session_state.api_url = 'http://localhost:8000'
+        st.success("✅ Beállítások visszaállítva!")
+        time.sleep(1)
+        st.rerun()
+
+# ============================================
+# 6. FŐ ALKALMAZÁS
+# ============================================
+
+def main():
+    """Fő alkalmazás"""
+    
+    # Oldalsáv renderelése
+    render_sidebar()
+    
+    # Oldal kiválasztása a session state alapján
+    page = st.session_state.page
+    
+    # Oldal renderelése
+    if page == 'current':
+        render_current_weather()
+    elif page == 'history':
+        render_history()
+    elif page == 'stats':
+        render_statistics()
+    elif page == 'comparison':
+        render_comparison()
+    elif page == 'settings':
+        render_settings()
+    
+    # Footer
+    st.markdown("---")
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
+    with col1:
+        st.caption("🌤️ Weather Dashboard v2.0 | Multi-paradigmás programozás")
+    
+    with col2:
+        if st.button("📚 API Dokumentáció", key="api_docs"):
+            webbrowser.open(f"{st.session_state.api_url}/docs")
+    
+    with col3:
+        if st.button("🔄 Oldal frissítése", key="refresh_page"):
+            st.session_state.last_refresh = datetime.now()
+            st.rerun()
+
+# ============================================
+# 7. INDÍTÁS
+# ============================================
+
+if __name__ == "__main__":
+    main()
