@@ -18,7 +18,25 @@ Egy teljes értékű időjárás dashboard mikroszerviz architektúrával, 7 nap
 
 ## 🚀 Telepítés és Futtatás
 
-### 1. Klónozás
+## ▶️ Új Indítás (Moduláris verzió)
+
+### 1. Klónozás és beállítás
 ```bash
-git clone https://github.com/felhasznalo/weather-dashboard.git
+git clone [repository-url]
 cd weather-dashboard
+
+# Virtual environment
+python -m venv weather-dashboard
+
+# Windows:
+venv\Scripts\activate
+
+# Mac/Linux:
+source venv/bin/activate
+
+# Függőségek
+pip install -r requirements.txt
+
+# Konfiguráció
+cp .env.example .env
+# Szerkeszd a .env fájlt és add hozzá az OpenWeather API kulcsodat

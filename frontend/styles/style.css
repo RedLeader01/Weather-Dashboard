@@ -1,0 +1,136 @@
+/* CSS stílusok a Weather Dashboard-hoz - SAJÁT NAVIGÁCIÓVAL */
+
+/* Általános stílusok */
+.main-header {
+    font-size: 2.5rem;
+    color: #1E88E5;
+    text-align: center;
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Időjárás kártyák */
+.weather-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px;
+    padding: 25px;
+    color: white !important;
+    margin: 10px 0;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.forecast-card {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    color: #333333 !important;
+    transition: all 0.3s ease;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.weather-card:hover, .forecast-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 30px rgba(0,0,0,0.15) !important;
+}
+
+/* Metrika kártyák */
+.metric-card {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 20px;
+    border-left: 5px solid #1E88E5;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    color: #333333 !important;
+}
+
+/* Gombok */
+.stButton>button {
+    width: 100%;
+    border-radius: 8px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.stButton>button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+/* Oldalsáv */
+.sidebar .sidebar-content {
+    background: #f8f9fa;
+}
+
+/* Város chipek */
+.city-chip {
+    display: inline-block;
+    background: #e3f2fd;
+    color: #1E88E5;
+    padding: 5px 15px;
+    border-radius: 20px;
+    margin: 3px;
+    font-weight: 500;
+}
+
+/* Ma kiemelése */
+.today-highlight {
+    border: 3px solid #1E88E5 !important;
+    box-shadow: 0 0 15px rgba(30, 136, 229, 0.3) !important;
+}
+
+/* Gyors előrejelzés kártya */
+.quick-forecast-card {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
+    border-radius: 10px !important;
+    padding: 15px !important;
+    text-align: center !important;
+    color: #333333 !important;
+    border: 1px solid #e0e0e0;
+    margin: 5px;
+}
+
+/* Ikon konténer */
+.weather-icon-container {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    padding: 8px;
+    display: inline-block;
+    margin: 8px 0;
+    backdrop-filter: blur(5px);
+}
+
+/* Streamlit specifikus fixek */
+[data-testid="stSidebarNav"] {
+    display: none !important;
+}
+
+section[data-testid="stSidebar"] {
+    min-width: 300px !important;
+    max-width: 350px !important;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .main-header {
+        font-size: 2rem;
+    }
+    
+    .weather-card, .forecast-card {
+        min-height: 250px;
+        padding: 15px;
+    }
+}

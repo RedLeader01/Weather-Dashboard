@@ -1,0 +1,68 @@
+"""Segédfüggvények a frontendhez"""
+from datetime import datetime, timedelta
+
+def format_temperature(temp: float) -> str:
+    """Hőmérséklet formázása"""
+    return f"{temp:.1f}°C"
+
+def format_time(timestamp_str: str) -> str:
+    """Időbélyeg formázása"""
+    try:
+        dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+        return dt.strftime("%Y.%m.%d %H:%M")
+    except:
+        return timestamp_str
+
+def get_weekday(date_str: str) -> str:
+    """Dátum szöveggé konvertálása (hét napja)"""
+    try:
+        date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+        weekdays = ["Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat", "Vasárnap"]
+        today = datetime.now().date()
+        
+        if date_obj.date() == today:
+            return "Ma"
+        elif date_obj.date() == today + timedelta(days=1):
+            return "Holnap"
+        else:
+            return weekdays[date_obj.weekday()]
+    except:
+        return date_str
+
+def format_date(date_str: str) -> str:
+    """Dátum formázása"""
+    try:
+        date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+        return date_obj.strftime("%m.%d")
+    except:
+        return date_str
+
+def get_weather_icon(icon_code: str) -> str:
+    """Időjárás ikon URL generálása"""
+    if icon_code:
+        return f"https://openweathermap.org/img/wn/{icon_code}@2x.png"
+    return ""
+
+def celsius_to_fahrenheit(celsius: float) -> float:
+    """Celsius → Fahrenheit konverzió"""
+    return round(celsius * 9/5 + 32, 1)
+
+def kmh_to_mph(kmh: float) -> float:
+    """km/h → mph konverzió"""
+    return round(kmh * 0.621371, 1)
+
+def get_pop_emoji(pop_value: float) -> tuple:
+    """Csapadék valószínűség alapján emoji és szín"""
+    try:
+        pop_value = float(pop_value)
+    except (ValueError, TypeError):
+        pop_value = 0
+    
+    if pop_value > 70:
+        return "🌧️", "#667eea"
+    elif pop_value > 40:
+        return "🌦️", "#95E1D3"
+    elif pop_value > 10:
+        return "⛅", "#FFD166"
+    else:
+        return "☀️", "#FF6B6B"
