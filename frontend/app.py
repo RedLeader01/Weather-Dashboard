@@ -2,28 +2,40 @@
 🌤️ Weather Dashboard Frontend - Fő alkalmazás
 """
 import streamlit as st
-from datetime import datetime
 import webbrowser
 import sys
 import os
+from datetime import datetime
 
-# Fontos: Python path beállítása a megfelelő importokhoz
+# Python path beállítása a megfelelő importokhoz
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import saját modulok
 from config import config
 from api_client import WeatherAPIClient
+
+# Oldalsáv komponens import (közvetlenül)
 from components.sidebar import display_sidebar
 
-# Manuálisan importáljuk az egyes oldalakat a views mappából
-from views import (
-    current as current_page,
-    history as history_page, 
-    stats as stats_page,
-    comparison as comparison_page,
-    forecast as forecast_page,
-    settings as settings_page
-)
+# Oldalak importálása
+import importlib.util
+import os
+
+# Dinamikus importálás az oldalaknak
+def import_page(module_name, file_path):
+    """Dinamikusan importál egy modult"""
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+# Importáljuk az oldalakat
+current_page = import_page("current", "views/current.py")
+history_page = import_page("history", "views/history.py")
+stats_page = import_page("stats", "views/stats.py")
+comparison_page = import_page("comparison", "views/comparison.py")
+forecast_page = import_page("forecast", "views/forecast.py")
+settings_page = import_page("settings", "views/settings.py")
 
 # ============================================
 # 1. ALKALMAZÁS INICIALIZÁLÁSA
@@ -40,106 +52,25 @@ st.set_page_config(
 # CSS stílusok betöltése
 def load_css():
     """CSS stílusok betöltése"""
-    css_paths = [
-        "frontend/styles/style.css",
-        "styles/style.css",
-        os.path.join(os.path.dirname(__file__), "styles", "style.css")
-    ]
+    css_path = os.path.join("styles", "style.css")
+    if os.path.exists(css_path):
+        try:
+            with open(css_path, "r", encoding="utf-8") as f:
+                st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+            return True
+        except:
+            pass
     
-    for css_path in css_paths:
-        if os.path.exists(css_path):
-            try:
-                with open(css_path, "r", encoding="utf-8") as f:
-                    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-                return True
-            except:
-                continue
-    
-    # Ha nem találja a fájlt, használjuk a beágyazott CSS-t
+    # Backup CSS
     st.markdown("""
     <style>
-        .main-header {
-            font-size: 2.5rem;
-            color: #1E88E5;
-            text-align: center;
-            margin-bottom: 2rem;
-            padding: 1rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .weather-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 15px;
-            padding: 25px;
-            color: white !important;
-            margin: 10px 0;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
-        }
-        .forecast-card {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            border-radius: 12px;
-            padding: 20px;
-            border: 1px solid #e0e0e0;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-            color: #333333 !important;
-            transition: all 0.3s ease;
-        }
-        .metric-card {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 20px;
-            border-left: 5px solid #1E88E5;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            color: #333333 !important;
-        }
-        .stButton>button {
-            width: 100%;
-            border-radius: 8px;
-            font-weight: bold;
-            transition: all 0.3s ease;
-        }
-        .stButton>button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        .sidebar .sidebar-content {
-            background: #f8f9fa;
-        }
-        .city-chip {
-            display: inline-block;
-            background: #e3f2fd;
-            color: #1E88E5;
-            padding: 5px 15px;
-            border-radius: 20px;
-            margin: 3px;
-            font-weight: 500;
-        }
-        .today-highlight {
-            border: 3px solid #1E88E5 !important;
-            box-shadow: 0 0 15px rgba(30, 136, 229, 0.3) !important;
-        }
-        .quick-forecast-card {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
-            border-radius: 10px !important;
-            padding: 15px !important;
-            text-align: center !important;
-            color: #333333 !important;
-            border: 1px solid #e0e0e0;
-        }
-        .weather-icon-container {
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            padding: 8px;
-            display: inline-block;
-            margin: 8px 0;
-            backdrop-filter: blur(5px);
-        }
+        .main-header { font-size: 2.5rem; color: #1E88E5; text-align: center; margin-bottom: 2rem; }
+        .weather-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; padding: 25px; color: white !important; margin: 10px 0; }
+        .stButton>button { width: 100%; border-radius: 8px; font-weight: bold; }
+        .today-highlight { border: 3px solid #1E88E5 !important; }
+        [data-testid="stSidebarNav"] { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
-    
     return False
 
 # CSS betöltése
@@ -153,7 +84,8 @@ def init_session_state():
         'api_url': config.BACKEND_URL,
         'last_refresh': datetime.now(),
         'selected_cities': config.DEFAULT_CITIES[:3],
-        'forecast_cache': {}
+        'forecast_cache': {},
+        'app_initialized': False
     }
     
     for key, value in default_values.items():
@@ -161,14 +93,74 @@ def init_session_state():
             st.session_state[key] = value
 
 # ============================================
-# 2. OLDAL ROUTING - SAJÁT IMPLEMENTÁCIÓ
+# 2. KAPCSOLAT ELLENŐRZÉS
+# ============================================
+
+def check_backend_connection(api_client):
+    """Backend kapcsolat ellenőrzése"""
+    try:
+        health_data = api_client.get_health()
+        if health_data:
+            st.session_state.app_initialized = True
+            return True
+        else:
+            st.session_state.app_initialized = False
+            return False
+    except:
+        st.session_state.app_initialized = False
+        return False
+
+def display_welcome_screen(api_client):
+    """Üdvözlő képernyő ha nincs kapcsolat"""
+    st.markdown('<h1 class="main-header">🌤️ Időjárás Dashboard</h1>', unsafe_allow_html=True)
+    
+    st.info("""
+    **Üdvözöljük az Időjárás Dashboard-ban!**
+    
+    Az alkalmazás betöltése folyamatban...
+    """)
+    
+    # Kapcsolat ellenőrzése
+    with st.spinner("Backend kapcsolat ellenőrzése..."):
+        if check_backend_connection(api_client):
+            st.success("✅ Sikeres kapcsolat a backenddel!")
+            st.rerun()
+            return True
+        else:
+            st.error("❌ Nem sikerült kapcsolódni a backendhez")
+            
+            st.markdown("""
+            **Hibaelhárítás:**
+            1. Ellenőrizd, hogy a backend fut-e: `http://localhost:8000`
+            2. Indítsd el a backendet: `cd backend && uvicorn main:app --reload`
+            3. Próbáld újra a kapcsolatot
+            """)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔄 Újrapróbálkozás", use_container_width=True):
+                    st.rerun()
+            with col2:
+                if st.button("⚙️ Beállítások", use_container_width=True):
+                    st.session_state.page = 'settings'
+                    st.rerun()
+            
+            return False
+
+# ============================================
+# 3. OLDAL ROUTING
 # ============================================
 
 def display_page(api_client):
-    """Oldal kiválasztása és megjelenítése - SAJÁT NAVIGÁCIÓ"""
+    """Oldal kiválasztása és megjelenítése"""
     page = st.session_state.page
     
-    # Oldal mapping
+    # Ha nincs inicializálva, jelenítsük meg az üdvözlőt
+    if not st.session_state.get('app_initialized', False):
+        if not display_welcome_screen(api_client):
+            return
+    
+    # Oldal routing
     if page == 'current':
         current_page.display(api_client, config.DEFAULT_CITIES)
     elif page == 'history':
@@ -186,7 +178,7 @@ def display_page(api_client):
         current_page.display(api_client, config.DEFAULT_CITIES)
 
 # ============================================
-# 3. FŐ ALKALMAZÁS
+# 4. FŐ ALKALMAZÁS
 # ============================================
 
 def main():
@@ -201,7 +193,7 @@ def main():
     # Oldalsáv megjelenítése
     display_sidebar(api_client, config)
     
-    # Oldal renderelése
+    # Oldal tartalom
     display_page(api_client)
     
     # Footer
@@ -220,7 +212,7 @@ def main():
             st.rerun()
 
 # ============================================
-# 4. ALKALMAZÁS INDÍTÁSA
+# 5. INDÍTÁS
 # ============================================
 
 if __name__ == "__main__":

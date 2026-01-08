@@ -1,11 +1,11 @@
 """Időjárás kártyák komponensek"""
 import streamlit as st
 
+# Közvetlen import (mivel mind a frontend mappában vannak)
+from utils import get_weekday, format_date, get_weather_icon, get_pop_emoji, format_time
+
 def get_forecast_card_html(forecast: dict, is_today: bool = False) -> str:
     """Egy nap előrejelzésének HTML generálása"""
-    # ABSZOLÚT IMPORT a saját utils-ból
-    from frontend.utils import get_weekday, format_date, get_weather_icon, get_pop_emoji
-    
     weekday = get_weekday(forecast['date'])
     date_formatted = format_date(forecast['date'])
     icon_url = get_weather_icon(forecast['icon'])
@@ -68,8 +68,10 @@ def get_forecast_card_html(forecast: dict, is_today: bool = False) -> str:
 
 def display_current_weather_card(city: str, weather_data: dict):
     """Aktuális időjárás kártya"""
-    from frontend.utils import format_time, get_weather_icon
-    
+    if not weather_data:
+        st.error("Nincs időjárás adat!")
+        return
+        
     icon_url = get_weather_icon(weather_data.get('icon'))
     
     col1, col2 = st.columns([2, 1])
@@ -77,10 +79,10 @@ def display_current_weather_card(city: str, weather_data: dict):
     with col1:
         st.markdown(f"""
         <div class='weather-card'>
-            <h1 style='font-size: 4.5rem; margin: 0; color: white !important;'>{weather_data['temperature']:.1f}°C</h1>
+            <h1 style='font-size: 4.5rem; margin: 0; color: white !important;'>{weather_data.get('temperature', 'N/A'):.1f}°C</h1>
             <h2 style='margin-top: 0; color: white !important;'>{city}</h2>
-            <p style='font-size: 1.8rem; margin-bottom: 5px; color: white !important;'>{weather_data['description'].capitalize()}</p>
-            <p style='opacity: 0.9; color: white !important;'>Utolsó frissítés: {format_time(weather_data['timestamp'])}</p>
+            <p style='font-size: 1.8rem; margin-bottom: 5px; color: white !important;'>{weather_data.get('description', 'N/A').capitalize()}</p>
+            <p style='opacity: 0.9; color: white !important;'>Utolsó frissítés: {format_time(weather_data.get('timestamp', ''))}</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -95,7 +97,7 @@ def display_current_weather_card(city: str, weather_data: dict):
     
     cols = st.columns(4)
     metrics = [
-        ("💧 Páratartalom", f"{weather_data['humidity']}%", "#4ECDC4"),
+        ("💧 Páratartalom", f"{weather_data.get('humidity', 'N/A')}%", "#4ECDC4"),
         ("🎯 Légnyomás", f"{weather_data.get('pressure', 'N/A')} hPa", "#FF6B6B"),
         ("💨 Szélsebesség", f"{weather_data.get('wind_speed', 'N/A')} m/s", "#95E1D3"),
         ("📍 Ország", weather_data.get('country', 'HU'), "#FFD166")
@@ -112,8 +114,6 @@ def display_current_weather_card(city: str, weather_data: dict):
 
 def display_quick_forecast_card(forecast: dict):
     """Gyors előrejelzés kártya (3 napos)"""
-    from frontend.utils import get_weekday, get_weather_icon
-    
     weekday = get_weekday(forecast['date'])
     icon_url = get_weather_icon(forecast['icon'])
     

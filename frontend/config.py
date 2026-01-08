@@ -1,10 +1,15 @@
 """Frontend konfiguráció kezelés"""
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
-# Betöltjük a .env fájlt a projekt gyökeréből
-env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
-load_dotenv(env_path)
+# .env fájl betöltése
+env_path = Path(__file__).parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    # Ha nincs .env, használjunk alapértelmezett értékeket
+    print("⚠️  .env fájl nem található, alapértelmezett értékek használata")
 
 class FrontendConfig:
     """Frontend konfiguráció"""

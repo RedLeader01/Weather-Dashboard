@@ -80,7 +80,15 @@ def display_sidebar(api_client, config):
         
         with col2:
             if st.button("🗑️ Cache", use_container_width=True, help="Cache törlése"):
-                st.cache_data.clear()
+                # Töröljük a cache-t
+                keys_to_delete = []
+                for key in st.session_state.keys():
+                    if key.startswith('current_') or key.startswith('forecast_') or key.startswith('quick_forecast_') or key.startswith('history_') or key.startswith('stats_') or key.startswith('comparison_'):
+                        keys_to_delete.append(key)
+                
+                for key in keys_to_delete:
+                    st.session_state.pop(key, None)
+                
                 st.success("✅ Cache törölve")
                 time.sleep(1)
                 st.rerun()
@@ -88,8 +96,8 @@ def display_sidebar(api_client, config):
         st.divider()
         
         # Információk
-        st.caption(f"**Backend:** {api_client.base_url}")
-        st.caption(f"**Frissítve:** {st.session_state.last_refresh.strftime('%H:%M:%S')}")
+        if 'last_refresh' in st.session_state:
+            st.caption(f"**Frissítve:** {st.session_state.last_refresh.strftime('%H:%M:%S')}")
         
         # Város információk
         if st.button("🏙️ Városok", use_container_width=True, type="secondary"):

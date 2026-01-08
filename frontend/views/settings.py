@@ -82,12 +82,10 @@ def display(api_client, cities):
         
         with col2:
             scheduler_status = config_data.get('scheduler_status', 'inactive')
-            status_color = "green" if scheduler_status == 'active' else "red"
             st.metric("Scheduler állapot", scheduler_status)
             
             openweather_status = config_data.get('openweather_configured', False)
             openweather_text = "Konfigurálva" if openweather_status else "Nincs konfigurálva"
-            openweather_color = "green" if openweather_status else "red"
             st.metric("OpenWeather API", openweather_text)
     
     # Visszaállítás

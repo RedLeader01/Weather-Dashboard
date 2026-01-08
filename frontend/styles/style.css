@@ -1,4 +1,4 @@
-/* CSS stílusok a Weather Dashboard-hoz - SAJÁT NAVIGÁCIÓVAL */
+/* CSS stílusok a Weather Dashboard-hoz */
 
 /* Általános stílusok */
 .main-header {
@@ -22,10 +22,6 @@
     margin: 10px 0;
     box-shadow: 0 10px 20px rgba(0,0,0,0.1);
     transition: all 0.3s ease;
-    min-height: 280px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
 }
 
 .forecast-card {
@@ -36,10 +32,6 @@
     box-shadow: 0 4px 8px rgba(0,0,0,0.05);
     color: #333333 !important;
     transition: all 0.3s ease;
-    min-height: 280px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
 }
 
 .weather-card:hover, .forecast-card:hover {
@@ -94,18 +86,17 @@
 
 /* Gyors előrejelzés kártya */
 .quick-forecast-card {
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
+    background: linear-gradient(135deg, #2373ec9f 0%, #4f555fcc 100%) !important;
     border-radius: 10px !important;
     padding: 15px !important;
     text-align: center !important;
-    color: #333333 !important;
+    color: #ffffff !important;
     border: 1px solid #e0e0e0;
-    margin: 5px;
 }
 
 /* Ikon konténer */
 .weather-icon-container {
-    background: rgba(255, 255, 255, 0.3);
+    background: rgba(0, 135, 224, 0.678);
     border-radius: 50%;
     padding: 8px;
     display: inline-block;
@@ -113,24 +104,7 @@
     backdrop-filter: blur(5px);
 }
 
-/* Streamlit specifikus fixek */
+/* Streamlit auto-navigation tiltása */
 [data-testid="stSidebarNav"] {
     display: none !important;
-}
-
-section[data-testid="stSidebar"] {
-    min-width: 300px !important;
-    max-width: 350px !important;
-}
-
-/* Responsive design */
-@media (max-width: 768px) {
-    .main-header {
-        font-size: 2rem;
-    }
-    
-    .weather-card, .forecast-card {
-        min-height: 250px;
-        padding: 15px;
-    }
 }

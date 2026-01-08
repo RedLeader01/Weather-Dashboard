@@ -1,10 +1,15 @@
 """Diagramok és grafikonok"""
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
+
+# Közvetlen import
+from utils import get_weekday
 
 def create_temperature_chart(data: list, chart_type: str = "Vonal"):
     """Hőmérséklet diagram létrehozása"""
+    if not data:
+        return None
+        
     df = pd.DataFrame(data)
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     df = df.sort_values('timestamp')
@@ -30,17 +35,38 @@ def create_temperature_chart(data: list, chart_type: str = "Vonal"):
             marker_color='#4ECDC4',
             hovertemplate='<b>%{x}</b><br>Hőmérséklet: %{y:.1f}°C<extra></extra>'
         ))
+    elif chart_type == "Pont":
+        fig.add_trace(go.Scatter(
+            x=df['timestamp'],
+            y=df['temperature'],
+            mode='markers',
+            name='Hőmérséklet',
+            marker=dict(size=10, color=df['humidity'], colorscale='Viridis', showscale=True),
+            hovertemplate='<b>%{x|%H:%M}</b><br>Hőmérséklet: %{y:.1f}°C<br>Páratartalom: %{marker.color}%<extra></extra>'
+        ))
+    else:  # Terület
+        fig.add_trace(go.Scatter(
+            x=df['timestamp'],
+            y=df['temperature'],
+            mode='lines',
+            name='Hőmérséklet',
+            fill='tozeroy',
+            fillcolor='rgba(255, 107, 107, 0.2)',
+            line=dict(color='#FF6B6B', width=2),
+            hovertemplate='<b>%{x|%H:%M}</b><br>Hőmérséklet: %{y:.1f}°C<extra></extra>'
+        ))
     
-    # Páratartalom második tengelyen
-    fig.add_trace(go.Scatter(
-        x=df['timestamp'],
-        y=df['humidity'],
-        mode='lines',
-        name='Páratartalom',
-        yaxis='y2',
-        line=dict(color='#45B7D1', width=2, dash='dash'),
-        hovertemplate='<b>%{x|%H:%M}</b><br>Páratartalom: %{y}%<extra></extra>'
-    ))
+    # Második tengely a páratartalomhoz
+    if 'humidity' in df.columns:
+        fig.add_trace(go.Scatter(
+            x=df['timestamp'],
+            y=df['humidity'],
+            mode='lines',
+            name='Páratartalom',
+            yaxis='y2',
+            line=dict(color='#45B7D1', width=2, dash='dash'),
+            hovertemplate='<b>%{x|%H:%M}</b><br>Páratartalom: %{y}%<extra></extra>'
+        ))
     
     # Layout
     fig.update_layout(
@@ -53,7 +79,7 @@ def create_temperature_chart(data: list, chart_type: str = "Vonal"):
             tickfont=dict(color='#45B7D1'),
             overlaying='y',
             side='right'
-        ),
+        ) if 'humidity' in df.columns else {},
         height=500,
         template='plotly_white',
         hovermode='x unified',
@@ -64,7 +90,8 @@ def create_temperature_chart(data: list, chart_type: str = "Vonal"):
 
 def create_forecast_trend_chart(forecasts: list):
     """Előrejelzés trend diagram"""
-    from ..utils import get_weekday
+    if not forecasts:
+        return None
     
     dates = [get_weekday(f['date']) for f in forecasts]
     day_temps = [f['day_temp'] for f in forecasts]

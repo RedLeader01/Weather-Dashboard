@@ -28,37 +28,32 @@ def display(api_client, cities):
     
     with col3:
         if st.button("🔄 Frissítés", use_container_width=True, key="refresh_forecast"):
-            if 'forecast_cache' in st.session_state:
-                del st.session_state.forecast_cache
+            cache_keys = [k for k in st.session_state.keys() 
+                         if k.startswith(f"forecast_{city}")]
+            for key in cache_keys:
+                st.session_state.pop(key, None)
             st.rerun()
     
-    # Adatok lekérése
-    with st.spinner(f"{days} napos előrejelzés betöltése..."):
-        # Cache használata
-        cache_key = f"forecast_{city}_{days}"
-        
-        if 'forecast_cache' not in st.session_state:
-            st.session_state.forecast_cache = {}
-        
-        if cache_key not in st.session_state.forecast_cache:
+    # Adatok lekérése cache-el
+    cache_key = f"forecast_{city}_{days}"
+    
+    if cache_key not in st.session_state:
+        with st.spinner(f"{days} napos előrejelzés betöltése..."):
             data = api_client.get_weather_forecast(city, days)
-            if data:
-                st.session_state.forecast_cache[cache_key] = data
-            else:
-                data = None
-        else:
-            data = st.session_state.forecast_cache[cache_key]
+            st.session_state[cache_key] = data
+    else:
+        data = st.session_state[cache_key]
     
     if data and data.get('forecasts'):
-        from ..utils import get_weekday, format_date
-        from ..components.weather_cards import get_forecast_card_html
-        from ..components.charts import create_forecast_trend_chart
+        from utils import get_weekday, format_date
+        from components.weather_cards import get_forecast_card_html
+        from components.charts import create_forecast_trend_chart
         
         forecasts = data['forecasts']
         actual_days = len(forecasts)
         
         # Összefoglaló kártyák
-        st.subheader(f"📅 {actual_days} napos előrejelzés - {data['city']}")
+        st.subheader(f"📅 {actual_days} napos előrejelzés - {data.get('city', city)}")
         
         # Napok megjelenítése kártyákban
         if actual_days <= 3:
@@ -103,7 +98,7 @@ def display(api_client, cities):
                 
                 start_idx += row_count
                 if start_idx < actual_days:
-                    st.write("")  # Üres sor sorok között
+                    st.write("")
         
         st.divider()
         
@@ -111,7 +106,8 @@ def display(api_client, cities):
         if actual_days >= 3:
             st.subheader("📈 Hőmérséklet trend")
             fig = create_forecast_trend_chart(forecasts)
-            st.plotly_chart(fig, use_container_width=True)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
         
         # Részletes táblázat
         st.subheader("📋 Részletes előrejelzés")
@@ -139,7 +135,7 @@ def display(api_client, cities):
             hide_index=True
         )
         
-        # Exportálás lehetősége
+        # Exportálás
         if st.button("💾 Exportálás CSV-ként", use_container_width=True):
             csv = df.to_csv(index=False, encoding='utf-8-sig')
             st.download_button(
@@ -151,3 +147,4 @@ def display(api_client, cities):
     
     else:
         st.error("❌ Nem sikerült betölteni az előrejelzést")
+        st.info("Próbáld újra vagy válassz másik várost.")

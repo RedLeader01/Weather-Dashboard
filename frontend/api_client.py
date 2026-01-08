@@ -1,19 +1,21 @@
 """API kommunikáció a backenddel"""
 import requests
 import streamlit as st
-from datetime import datetime
+import time
 
 class WeatherAPIClient:
     """Weather API kliens"""
     
     def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url
+        self.session = requests.Session()
+        self.session.timeout = 10
         
     def fetch_data(self, endpoint: str, params: dict = None):
         """API hívás a backendhez"""
         try:
             url = f"{self.base_url}{endpoint}"
-            response = requests.get(url, params=params, timeout=10)
+            response = self.session.get(url, params=params, timeout=10)
             
             if response.status_code == 200:
                 return response.json()
@@ -21,7 +23,7 @@ class WeatherAPIClient:
                 st.warning(f"Nincs adat ehhez a lekérdezéshez")
                 return None
             else:
-                st.error(f"API hiba ({response.status_code})")
+                st.error(f"API hiba ({response.status_code}): {response.text[:100]}")
                 return None
                 
         except requests.exceptions.ConnectionError:
@@ -62,3 +64,11 @@ class WeatherAPIClient:
     def get_health(self):
         """Health check"""
         return self.fetch_data("/health")
+    
+    def test_connection(self):
+        """Kapcsolat tesztelése"""
+        try:
+            response = self.session.get(f"{self.base_url}/health", timeout=3)
+            return response.status_code == 200
+        except:
+            return False

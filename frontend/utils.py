@@ -8,10 +8,15 @@ def format_temperature(temp: float) -> str:
 def format_time(timestamp_str: str) -> str:
     """Időbélyeg formázása"""
     try:
-        dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-        return dt.strftime("%Y.%m.%d %H:%M")
+        if timestamp_str:
+            # Távolítsuk el a 'Z'-t és konvertáljunk
+            if 'Z' in timestamp_str:
+                timestamp_str = timestamp_str.replace('Z', '+00:00')
+            dt = datetime.fromisoformat(timestamp_str)
+            return dt.strftime("%Y.%m.%d %H:%M")
     except:
-        return timestamp_str
+        pass
+    return timestamp_str
 
 def get_weekday(date_str: str) -> str:
     """Dátum szöveggé konvertálása (hét napja)"""
@@ -42,14 +47,6 @@ def get_weather_icon(icon_code: str) -> str:
     if icon_code:
         return f"https://openweathermap.org/img/wn/{icon_code}@2x.png"
     return ""
-
-def celsius_to_fahrenheit(celsius: float) -> float:
-    """Celsius → Fahrenheit konverzió"""
-    return round(celsius * 9/5 + 32, 1)
-
-def kmh_to_mph(kmh: float) -> float:
-    """km/h → mph konverzió"""
-    return round(kmh * 0.621371, 1)
 
 def get_pop_emoji(pop_value: float) -> tuple:
     """Csapadék valószínűség alapján emoji és szín"""

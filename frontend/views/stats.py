@@ -18,27 +18,32 @@ def display(api_client, cities):
             "Időtartam:",
             [1, 6, 12, 24, 48, 72, 168],
             index=3,
-            format_func=lambda x: f"{x} óra" if x < 24 else f"{x//24} nap" if x % 24 == 0 else f"{x} óra",
+            format_func=lambda x: f"{x} óra" if x < 24 else f"{x//24} nap",
             key="stats_hours"
         )
     
     with col3:
-        if st.button("📈 Diagram generálás", use_container_width=True, key="generate_chart"):
-            st.session_state.show_chart = True
+        show_chart = st.button("📈 Diagram generálás", use_container_width=True, key="generate_chart")
     
     # Adatok lekérése
-    with st.spinner("Statisztikák számítása..."):
-        data = api_client.get_weather_stats(city, hours)
+    cache_key = f"stats_{city}_{hours}"
+    
+    if cache_key not in st.session_state:
+        with st.spinner(f"{city} statisztikáinak számítása..."):
+            data = api_client.get_weather_stats(city, hours)
+            st.session_state[cache_key] = data
+    else:
+        data = st.session_state[cache_key]
     
     if data:
-        from ..utils import format_time
+        from frontend.utils import format_time
         
         # Metrikák
         st.subheader(f"📈 Statisztikák - {city} (utolsó {hours} óra)")
         
         cols = st.columns(4)
         metrics = [
-            ("🌡️ Átlag hőmérséklet", f"{data['avg_temperature']:.1f}°C", "#FF6B6B"),
+            ("🌡️ Átlag", f"{data['avg_temperature']:.1f}°C", "#FF6B6B"),
             ("📉 Minimum", f"{data['min_temperature']:.1f}°C", "#4ECDC4"),
             ("📈 Maximum", f"{data['max_temperature']:.1f}°C", "#45B7D1"),
             ("🔢 Mérések", str(data['record_count']), "#95E1D3")
@@ -72,7 +77,7 @@ def display(api_client, cities):
             """)
         
         with col2:
-            # Egyszerű diagram a hőmérséklet tartományhoz
+            # Diagram a hőmérséklet tartományhoz
             fig = go.Figure(data=[
                 go.Bar(
                     x=['Minimum', 'Átlag', 'Maximum'],
@@ -94,8 +99,8 @@ def display(api_client, cities):
             
             st.plotly_chart(fig, use_container_width=True)
         
-        # Ha elérhető, jelenítsük meg az előzmények diagramját is
-        if st.session_state.get('show_chart', False):
+        # Időbeli változás diagram
+        if show_chart:
             history_data = api_client.get_weather_history(city, min(48, hours*2))
             if history_data and len(history_data) > 1:
                 st.subheader("📈 Időbeli változás")
@@ -139,10 +144,4 @@ def display(api_client, cities):
     
     else:
         st.error(f"❌ Nincs elég adat {city} városhoz az elmúlt {hours} órában")
-        st.info("""
-        **Megoldások:**
-        1. Várj, hogy a scheduler gyűjtsön több adatot
-        2. Használd a '🔄 Frissítés' gombot
-        3. Ellenőrizd, hogy a backend fut-e
-        4. Csökkentsd az időtartamot (pl. 1 óra)
-        """)
+        st.info("Várj, hogy a scheduler gyűjtsön több adatot.")

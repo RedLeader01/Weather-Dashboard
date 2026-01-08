@@ -21,7 +21,6 @@ def display(api_client, cities):
     
     # Frissítsük a session state-et
     st.session_state.selected_cities = selected_cities
-    
     # Információ
     st.caption(f"Kiválasztva: {len(selected_cities)} város")
     
@@ -37,28 +36,30 @@ def display(api_client, cities):
         return
     
     # Adatok gyűjtése
-    with st.spinner("Városok adatainak betöltése..."):
-        cities_data = []
-        failed_cities = []
-        
-        progress_bar = st.progress(0)
-        for i, city in enumerate(selected_cities):
-            data = api_client.get_current_weather(city)
-            if data:
-                cities_data.append(data)
-            else:
-                failed_cities.append(city)
-                # Próbáljuk meg az előzményekből az utolsó adatot
-                history = api_client.get_weather_history(city, 1)
-                if history and len(history) > 0:
-                    cities_data.append(history[0])
-                else:
-                    st.warning(f"Nincs adat a(z) {city} városhoz")
+    cache_key = f"comparison_{'_'.join(sorted(selected_cities))}"
+    
+    if cache_key not in st.session_state:
+        with st.spinner("Városok adatainak betöltése..."):
+            cities_data = []
+            failed_cities = []
             
-            progress_bar.progress((i + 1) / len(selected_cities))
-        
-        if failed_cities:
-            st.warning(f"⚠️ Néhány város adatai nem elérhetők: {', '.join(failed_cities)}")
+            for city in selected_cities:
+                data = api_client.get_current_weather(city)
+                if data:
+                    cities_data.append(data)
+                else:
+                    failed_cities.append(city)
+                    # Próbáljuk meg az előzményekből
+                    history = api_client.get_weather_history(city, 1)
+                    if history and len(history) > 0:
+                        cities_data.append(history[0])
+            
+            if failed_cities:
+                st.warning(f"⚠️ Néhány város adatai nem elérhetők: {', '.join(failed_cities)}")
+            
+            st.session_state[cache_key] = cities_data
+    else:
+        cities_data = st.session_state[cache_key]
     
     if len(cities_data) < 2:
         st.error("❌ Nincs elég adat az összehasonlításhoz!")
@@ -67,7 +68,7 @@ def display(api_client, cities):
     # Diagramok
     st.subheader("📊 Hőmérséklet összehasonlítás")
     
-    # 1. Oszlop diagram
+    # Oszlop diagram
     fig1 = go.Figure(data=[
         go.Bar(
             x=[d['city'] for d in cities_data],
@@ -89,10 +90,10 @@ def display(api_client, cities):
     
     st.plotly_chart(fig1, use_container_width=True)
     
-    # 2. Táblázatos összehasonlítás
+    # Táblázatos összehasonlítás
     st.subheader("📋 Összehasonlító táblázat")
     
-    from ..utils import format_time
+    from frontend.utils import format_time
     
     comparison_data = []
     for data in cities_data:
@@ -121,7 +122,7 @@ def display(api_client, cities):
         }
     )
     
-    # Exportálás lehetősége
+    # Exportálás
     if st.button("💾 Adatok exportálása CSV-ként", key="export_csv"):
         csv = df.to_csv(index=False, encoding='utf-8-sig')
         st.download_button(

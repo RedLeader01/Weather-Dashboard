@@ -22,40 +22,47 @@ def display(api_client, cities):
             key="chart_type"
         )
     
-    # Adatok lekérése
-    with st.spinner("Előzmények betöltése..."):
-        data = api_client.get_weather_history(city, limit)
+    # Adatok lekérése cache-el
+    cache_key = f"history_{city}_{limit}"
+    
+    if cache_key not in st.session_state:
+        with st.spinner(f"{city} előzményeinek betöltése..."):
+            data = api_client.get_weather_history(city, limit)
+            st.session_state[cache_key] = data
+    else:
+        data = st.session_state[cache_key]
     
     if data and len(data) > 0:
+        from components.charts import create_temperature_chart
+        from utils import format_time
+        
         # Diagram
-        from ..components.charts import create_temperature_chart
         fig = create_temperature_chart(data, chart_type)
-        fig.update_layout(title=f'{city} - Időjárás előzmények')
-        st.plotly_chart(fig, use_container_width=True)
+        if fig:
+            fig.update_layout(title=f'{city} - Időjárás előzmények')
+            st.plotly_chart(fig, use_container_width=True)
         
         # Statisztikák
         st.subheader("📊 Statisztikai összefoglaló")
         
-        if len(data) > 1:
-            df = pd.DataFrame(data)
-            
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.metric("Átlag hőmérséklet", f"{df['temperature'].mean():.1f}°C")
-            
-            with col2:
-                st.metric("Minimum", f"{df['temperature'].min():.1f}°C")
-            
-            with col3:
-                st.metric("Maximum", f"{df['temperature'].max():.1f}°C")
-            
-            with col4:
-                st.metric("Változatosság", f"{df['temperature'].std():.1f}°C")
+        df = pd.DataFrame(data)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Átlag hőmérséklet", f"{df['temperature'].mean():.1f}°C")
+        
+        with col2:
+            st.metric("Minimum", f"{df['temperature'].min():.1f}°C")
+        
+        with col3:
+            st.metric("Maximum", f"{df['temperature'].max():.1f}°C")
+        
+        with col4:
+            st.metric("Változatosság", f"{df['temperature'].std():.1f}°C")
         
         # Részletes adatok
         with st.expander("📋 Részletes adatok", expanded=False):
-            from ..utils import format_time
             display_df = df[['timestamp', 'temperature', 'humidity', 'pressure', 'wind_speed', 'description']].copy()
             display_df['timestamp'] = display_df['timestamp'].apply(format_time)
             display_df.columns = ['Idő', 'Hőmérséklet (°C)', 'Páratartalom (%)', 'Nyomás (hPa)', 
@@ -64,9 +71,4 @@ def display(api_client, cities):
     
     else:
         st.warning(f"⚠️ Nincs elég adat {city} városhoz")
-        st.info("""
-        **Adatok generálása:**
-        1. Várj 5 percet, hogy a scheduler gyűjtsön adatot
-        2. Használd a '🔄 Frissítés' gombot az oldalsávban
-        3. Nyisd meg a '📊 Statisztikák' oldalt
-        """)
+        st.info("Használd a '🔄 Frissítés' gombot az oldalsávban több adat gyűjtéséhez.")
