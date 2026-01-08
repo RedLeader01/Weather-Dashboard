@@ -1,5 +1,5 @@
 """
-🌤️ Weather Dashboard Backend - CIRCULAR IMPORT JAVÍTVA
+🌤️ Weather Dashboard Backend
 """
 from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware

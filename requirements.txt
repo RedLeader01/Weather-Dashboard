@@ -1,17 +1,23 @@
-# Backend
+# Web framework-ök
 fastapi==0.128.0
 uvicorn[standard]==0.40.0
+streamlit==1.52.1
+
+# Adatkezelés
 sqlalchemy==2.0.23
+pandas==2.1.3
 pydantic==2.5.0
 requests==2.31.0
-python-dotenv==1.0.0
+
+# Időzítés és környezet
 apscheduler==3.10.4
 schedule==1.2.0
+python-dotenv==1.0.0
 
-# Frontend
-streamlit==1.52.2
-pandas==2.1.3
+# Vizualizáció
 plotly==6.5.1
 
 # Tesztelés
 pytest==9.0.2
+pytest-asyncio==1.3.0
+httpx==0.28.1
