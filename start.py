@@ -6,7 +6,6 @@ import subprocess
 import sys
 import os
 import time
-import webbrowser
 
 def run_command(command, cwd=None, wait=True):
     """Parancs futtatása"""
@@ -113,10 +112,7 @@ def start_frontend():
     
     time.sleep(3)
     print("✅ Frontend elindult: http://localhost:8501")
-    
-    # Böngésző megnyitása
-    webbrowser.open("http://localhost:8501")
-    
+        
     return frontend_process
 
 def main():
