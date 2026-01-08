@@ -1,10 +1,17 @@
 # 🌤️ Weather Dashboard
 
-Egy egyszerű, de teljes értékű időjárás dashboard Pythonban.
+## 📋 Projekt Leírás
+Egy teljes értékű időjárás dashboard mikroszerviz architektúrával.
 
-## 🚀 Gyors Indítás
+## 🏗️ Architektúra
+- **Backend**: FastAPI REST API
+- **Frontend**: Streamlit webes felület
+- **Adatbázis**: SQLite/PostgreSQL
+- **Ütemező**: Automatikus adatfrissítés
 
-1. **Klónozás és beállítás:**
+## 🚀 Telepítés és Futtatás
+
+### 1. Klónozás
 ```bash
-git clone https://github.com/RedLeader01/Weather-Dashboard/tree/beta.git
-cd weather-dashboard
+git clone https://github.com/RedLeader01/Weather-Dashboard.git
+cd Weather-Dashboard
