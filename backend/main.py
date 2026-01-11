@@ -1,5 +1,5 @@
 """
-🌤️ Weather Dashboard Backend - 7 NAPOS ELŐREJELZÉSSEL KIBŐVÍTVE
+🌤️ Weather Dashboard Backend
 """
 from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +12,7 @@ import requests
 import logging
 from typing import List, Optional, Dict
 import math
+import uvicorn
 
 # Abszolút importok
 try:
@@ -348,7 +349,12 @@ app = FastAPI(
 # CORS beállítás
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:8501",
+        "http://localhost:3000",
+        "https://weather-dashboard.streamlit.app",  # Streamlit Cloud URL
+        "https://*.streamlit.app"  # Minden Streamlit subdomain
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -501,5 +507,5 @@ def shutdown_event():
 
 # 11. Futtatás
 if __name__ == "__main__":
-    import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

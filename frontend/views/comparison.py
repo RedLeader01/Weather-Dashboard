@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
+from utils import format_time
 
 def display(api_client, cities):
     """Városok összehasonlítása"""
@@ -93,7 +94,7 @@ def display(api_client, cities):
     # Táblázatos összehasonlítás
     st.subheader("📋 Összehasonlító táblázat")
     
-    from frontend.utils import format_time
+
     
     comparison_data = []
     for data in cities_data:

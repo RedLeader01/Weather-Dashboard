@@ -1,6 +1,8 @@
 """Aktuális időjárás oldal"""
 import streamlit as st
 from datetime import datetime
+from utils import get_weekday, get_weather_icon
+from components.weather_cards import display_current_weather_card
 
 def display(api_client, cities):
     """Aktuális időjárás megjelenítése"""
@@ -48,7 +50,7 @@ def display(api_client, cities):
     
     if data:
         # Fő információk
-        from components.weather_cards import display_current_weather_card
+        
         display_current_weather_card(city, data)
         
         # Gyors előrejelzés
@@ -62,11 +64,39 @@ def display(api_client, cities):
                 forecast_data = st.session_state[forecast_cache_key]
             
             if forecast_data and forecast_data.get('forecasts'):
+                st.subheader("🌤️ Következő 3 nap")
+                
+                # Három oszlop a 3 napnak
                 forecast_cols = st.columns(3)
                 for idx, forecast in enumerate(forecast_data['forecasts']):
                     with forecast_cols[idx]:
-                        from components.weather_cards import display_quick_forecast_card
-                        display_quick_forecast_card(forecast)
+                        # Kártya konténer
+                        with st.container():
+                            weekday = get_weekday(forecast['date'])
+                            if idx == 0:
+                                st.markdown(f"**🎯 {weekday}** (Ma)")
+                            else:
+                                st.markdown(f"**{weekday}**")
+                            
+                            # Ikon - használjuk a utils függvényt!
+                            icon_url = get_weather_icon(forecast.get('icon', ''), force_day_icon=True)
+                            
+                            if icon_url and icon_url != "https://openweathermap.org/img/wn/@2x.png":
+                                st.image(icon_url, width=60)
+                            
+                            # Hőmérséklet
+                            st.markdown(f"## {forecast['day_temp']:.1f}°C")
+                            
+                            # Leírás
+                            st.caption(forecast['description'].capitalize())
+                            
+                            # Részletek
+                            st.markdown("---")
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.metric("🌙 Éjszaka", f"{forecast['night_temp']:.1f}°C")
+                            with col2:
+                                st.metric("💧 Pára", f"{forecast['humidity']}%")
             else:
                 st.info("⚠️ Előrejelzés nem elérhető")
     

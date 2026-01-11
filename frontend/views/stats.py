@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from utils import format_time
 
 def display(api_client, cities):
     """Statisztikák megjelenítése"""
@@ -35,9 +36,7 @@ def display(api_client, cities):
     else:
         data = st.session_state[cache_key]
     
-    if data:
-        from frontend.utils import format_time
-        
+    if data:     
         # Metrikák
         st.subheader(f"📈 Statisztikák - {city} (utolsó {hours} óra)")
         
@@ -52,7 +51,7 @@ def display(api_client, cities):
         for col, (label, value, color) in zip(cols, metrics):
             with col:
                 st.markdown(f"""
-                <div class='metric-card'>
+                <div style='background: #f8f9fa; border-radius: 12px; padding: 20px; border-left: 5px solid {color}; box-shadow: 0 4px 6px rgba(0,0,0,0.05); color: #333333 !important;'>
                     <div style='font-size: 1.2rem; color: {color}; font-weight: bold;'>{label}</div>
                     <div style='font-size: 2.2rem; font-weight: bold; color: {color};'>{value}</div>
                 </div>

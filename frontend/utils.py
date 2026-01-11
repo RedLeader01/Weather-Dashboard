@@ -42,9 +42,12 @@ def format_date(date_str: str) -> str:
     except:
         return date_str
 
-def get_weather_icon(icon_code: str) -> str:
+def get_weather_icon(icon_code: str, force_day_icon: bool = False) -> str:
     """Időjárás ikon URL generálása"""
     if icon_code:
+        # Ha nappali ikont kérünk, de az éjszakai van
+        if force_day_icon and icon_code.endswith('n'):
+            icon_code = icon_code[:-1] + 'd'
         return f"https://openweathermap.org/img/wn/{icon_code}@2x.png"
     return ""
 

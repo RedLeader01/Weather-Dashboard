@@ -11,16 +11,26 @@ class WeatherAPIClient:
         self.session = requests.Session()
         self.session.timeout = 10
         
-    def fetch_data(self, endpoint: str, params: dict = None):
+    def fetch_data(self, endpoint: str, params: dict = None, method: str = "GET"):
         """API hívás a backendhez"""
         try:
             url = f"{self.base_url}{endpoint}"
-            response = self.session.get(url, params=params, timeout=10)
+            
+            if method == "GET":
+                response = self.session.get(url, params=params, timeout=10)
+            elif method == "POST":
+                response = self.session.post(url, json=params, timeout=10)
+            else:
+                st.error(f"❌ Nem támogatott metódus: {method}")
+                return None
             
             if response.status_code == 200:
                 return response.json()
             elif response.status_code == 404:
                 st.warning(f"Nincs adat ehhez a lekérdezéshez")
+                return None
+            elif response.status_code == 405:
+                st.error(f"❌ Helytelen HTTP metódus: {method} a {endpoint} végponthoz")
                 return None
             else:
                 st.error(f"API hiba ({response.status_code}): {response.text[:100]}")
@@ -58,8 +68,8 @@ class WeatherAPIClient:
         return data.get('cities', []) if data else []
     
     def refresh_data(self):
-        """Manuális frissítés"""
-        return self.fetch_data("/api/refresh")
+        """Manuális frissítés - POST kérés!"""
+        return self.fetch_data("/api/refresh", method="POST")
     
     def get_health(self):
         """Health check"""

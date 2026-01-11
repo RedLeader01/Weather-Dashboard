@@ -8,7 +8,7 @@ from datetime import datetime
 import logging
 from sqlalchemy.orm import Session
 
-# Abszolút importok - ne importálj semmit a main-ből!
+# Abszolút importok
 try:
     from .config import config
 except ImportError:
@@ -112,5 +112,5 @@ class WeatherScheduler:
         logger.info("🔃 Manuális frissítés kérés...")
         self.scheduled_update()
 
-# Globális scheduler példány - NEM lesz automatikusan konfigurálva!
+# Globális scheduler példány
 scheduler = WeatherScheduler()

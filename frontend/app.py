@@ -49,26 +49,80 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS stílusok betöltése
+# CSS betöltés
 def load_css():
     """CSS stílusok betöltése"""
-    css_path = os.path.join("styles", "style.css")
-    if os.path.exists(css_path):
-        try:
-            with open(css_path, "r", encoding="utf-8") as f:
-                st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-            return True
-        except:
-            pass
+    css_paths = [
+        os.path.join(os.path.dirname(__file__), "styles", "style.css"),
+        "styles/style.css",
+        "frontend/styles/style.css"
+    ]
+    
+    for css_path in css_paths:
+        if os.path.exists(css_path):
+            try:
+                with open(css_path, "r", encoding="utf-8") as f:
+                    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+                return True
+            except:
+                continue
     
     # Backup CSS
     st.markdown("""
     <style>
-        .main-header { font-size: 2.5rem; color: #1E88E5; text-align: center; margin-bottom: 2rem; }
-        .weather-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; padding: 25px; color: white !important; margin: 10px 0; }
-        .stButton>button { width: 100%; border-radius: 8px; font-weight: bold; }
-        .today-highlight { border: 3px solid #1E88E5 !important; }
-        [data-testid="stSidebarNav"] { display: none !important; }
+        .main-header { 
+            font-size: 2.5rem; 
+            color: #1E88E5; 
+            text-align: center; 
+            margin-bottom: 2rem; 
+            padding: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        /* Kártya stílusok */
+        .streamlit-container {
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            background: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
+        }
+        
+        /* Ma kiemelése */
+        .today-card {
+            border-left: 5px solid #1E88E5 !important;
+            background: linear-gradient(135deg, #f0f7ff 0%, #e3f2fd 100%) !important;
+        }
+        
+        /* Gombok */
+        .stButton>button {
+            border-radius: 8px !important;
+            font-weight: bold !important;
+        }
+        
+        /* Metrikák */
+        .metric-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            border-left: 4px solid #1E88E5;
+        }
+        
+        /* Elrejtjük az auto-navigation-t */
+        [data-testid="stSidebarNav"] {
+            display: none !important;
+        }
+        
+        /* Reszponzív design */
+        @media (max-width: 768px) {
+            .main-header {
+                font-size: 2rem !important;
+            }
+        }
     </style>
     """, unsafe_allow_html=True)
     return False
