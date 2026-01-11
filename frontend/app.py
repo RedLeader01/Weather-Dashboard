@@ -1,5 +1,5 @@
 """
-🌤️ Weather Dashboard Frontend - Fő alkalmazás
+🌤️ Weather Dashboard Frontend - Fő alkalmazás (Streamlit Cloud kompatibilis)
 """
 import streamlit as st
 import webbrowser
@@ -7,53 +7,111 @@ import sys
 import os
 from datetime import datetime
 
-# Python path beállítása a megfelelő importokhoz
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# ============================================
+# 1. PATH BEÁLLÍTÁSA STREAMLIT CLOUD SZERINT
+# ============================================
+
+# Streamlit Cloud a repository gyökeréből futtat, de a fájlok a frontend/ mappában vannak
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Ha a frontend mappában vagyunk (lokális fejlesztés)
+if current_dir.endswith('frontend'):
+    sys.path.insert(0, current_dir)
+    frontend_dir = current_dir
+else:
+    # Ha a gyökérben vagyunk (Streamlit Cloud)
+    # Próbáljuk megtalálni a frontend mappát
+    frontend_dir = os.path.join(current_dir, 'frontend')
+    if not os.path.exists(frontend_dir):
+        # Ha nincs frontend mappa, akkor itt vagyunk benne
+        frontend_dir = current_dir
+    sys.path.insert(0, frontend_dir)
 
 # Import saját modulok
-from config import config
-from api_client import WeatherAPIClient
-
-# Oldalsáv komponens import (közvetlenül)
-from components.sidebar import display_sidebar
-
-# Oldalak importálása
-import importlib.util
-import os
-
-# Dinamikus importálás az oldalaknak
-def import_page(module_name, file_path):
-    """Dinamikusan importál egy modult"""
-    spec = importlib.util.spec_from_file_location(module_name, file_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-# Importáljuk az oldalakat
-current_page = import_page("current", "views/current.py")
-history_page = import_page("history", "views/history.py")
-stats_page = import_page("stats", "views/stats.py")
-comparison_page = import_page("comparison", "views/comparison.py")
-forecast_page = import_page("forecast", "views/forecast.py")
-settings_page = import_page("settings", "views/settings.py")
+try:
+    from config import config
+    from api_client import WeatherAPIClient
+except ImportError as e:
+    st.error(f"Import hiba: {e}")
+    # Próbáljuk meg másképp
+    try:
+        sys.path.insert(0, os.path.join(frontend_dir, '..'))
+        from frontend.config import config
+        from frontend.api_client import WeatherAPIClient
+    except:
+        st.error("Nem sikerült importálni a modulokat")
+        config = None
+        WeatherAPIClient = None
 
 # ============================================
-# 1. ALKALMAZÁS INICIALIZÁLÁSA
+# 2. OLDALAK IMPORTÁLÁSA (Streamlit Cloud kompatibilis)
+# ============================================
+
+def load_page(module_name):
+    """Dinamikusan importál egy oldalt"""
+    try:
+        # Először próbáljuk a frontend/views/ mappából
+        views_dir = os.path.join(frontend_dir, 'views')
+        module_path = os.path.join(views_dir, f"{module_name}.py")
+        
+        if os.path.exists(module_path):
+            # Dinamikus importálás fájlból
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(module_name, module_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
+        else:
+            # Próbáljuk importálni a Python path-ról
+            import importlib
+            return importlib.import_module(f"views.{module_name}")
+    except Exception as e:
+        st.error(f"Hiba a(z) {module_name} oldal betöltésénél: {e}")
+        # Visszatérünk egy dummy modullal, ami csak hibaüzenetet jelenít meg
+        class DummyPage:
+            @staticmethod
+            def display(api_client, cities):
+                st.error(f"A(z) {module_name} oldal betöltése sikertelen")
+                st.info("Próbáld újratölteni az oldalt, vagy ellenőrizd a konzolt.")
+        
+        return DummyPage
+
+# Importáljuk az oldalakat
+try:
+    current_page = load_page("current")
+    history_page = load_page("history")
+    stats_page = load_page("stats")
+    comparison_page = load_page("comparison")
+    forecast_page = load_page("forecast")
+    settings_page = load_page("settings")
+except Exception as e:
+    st.error(f"Hiba az oldalak importálásakor: {e}")
+    # Hiba esetén hozzunk létre dummy oldalakat
+    class DummyPage:
+        @staticmethod
+        def display(api_client, cities):
+            st.error("Oldal betöltési hiba")
+
+    current_page = history_page = stats_page = comparison_page = forecast_page = settings_page = DummyPage
+
+# ============================================
+# 3. ALKALMAZÁS INICIALIZÁLÁSA
 # ============================================
 
 # Oldal konfiguráció
 st.set_page_config(
-    page_title=config.APP_TITLE,
-    page_icon=config.APP_ICON,
-    layout=config.APP_LAYOUT,
+    page_title=config.APP_TITLE if config else "Weather Dashboard",
+    page_icon="🌤️",
+    layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# CSS betöltés
+# CSS stílusok betöltése
 def load_css():
     """CSS stílusok betöltése"""
     css_paths = [
-        os.path.join(os.path.dirname(__file__), "styles", "style.css"),
+        os.path.join(frontend_dir, "styles", "style.css"),
+        os.path.join(frontend_dir, "style.css"),
         "styles/style.css",
         "frontend/styles/style.css"
     ]
@@ -67,7 +125,7 @@ def load_css():
             except:
                 continue
     
-    # Backup CSS
+    # Backup CSS ha a fájl nem található
     st.markdown("""
     <style>
         .main-header { 
@@ -76,52 +134,22 @@ def load_css():
             text-align: center; 
             margin-bottom: 2rem; 
             padding: 1rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
         }
-        
-        /* Kártya stílusok */
-        .streamlit-container {
-            border-radius: 10px;
-            padding: 15px;
-            margin: 10px 0;
-            background: white;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            border: 1px solid #e0e0e0;
+        .weather-card { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            border-radius: 15px; 
+            padding: 25px; 
+            color: white !important; 
+            margin: 10px 0; 
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1); 
         }
-        
-        /* Ma kiemelése */
-        .today-card {
-            border-left: 5px solid #1E88E5 !important;
-            background: linear-gradient(135deg, #f0f7ff 0%, #e3f2fd 100%) !important;
+        .stButton>button { 
+            width: 100%; 
+            border-radius: 8px; 
+            font-weight: bold; 
         }
-        
-        /* Gombok */
-        .stButton>button {
-            border-radius: 8px !important;
-            font-weight: bold !important;
-        }
-        
-        /* Metrikák */
-        .metric-card {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 15px;
-            border-left: 4px solid #1E88E5;
-        }
-        
-        /* Elrejtjük az auto-navigation-t */
-        [data-testid="stSidebarNav"] {
-            display: none !important;
-        }
-        
-        /* Reszponzív design */
-        @media (max-width: 768px) {
-            .main-header {
-                font-size: 2rem !important;
-            }
+        [data-testid="stSidebarNav"] { 
+            display: none !important; 
         }
     </style>
     """, unsafe_allow_html=True)
@@ -133,11 +161,16 @@ load_css()
 # Session state inicializálása
 def init_session_state():
     """Session state inicializálása"""
+    if config:
+        default_cities = config.DEFAULT_CITIES
+    else:
+        default_cities = ["Budapest", "Debrecen", "Szeged", "Pécs", "Győr", "Miskolc", "Nyíregyháza"]
+    
     default_values = {
         'page': 'current',
-        'api_url': config.BACKEND_URL,
+        'api_url': config.BACKEND_URL if config else "http://localhost:8000",
         'last_refresh': datetime.now(),
-        'selected_cities': config.DEFAULT_CITIES[:3],
+        'selected_cities': default_cities[:3],
         'forecast_cache': {},
         'app_initialized': False
     }
@@ -147,7 +180,95 @@ def init_session_state():
             st.session_state[key] = value
 
 # ============================================
-# 2. KAPCSOLAT ELLENŐRZÉS
+# 4. OLDALSÁV KOMPONENS (inline, nem importáljuk)
+# ============================================
+
+def display_sidebar(api_client, config_obj):
+    """Oldalsáv megjelenítése - inline implementáció"""
+    with st.sidebar:
+        # Logo és cím
+        st.markdown("""
+        <div style="text-align: center; padding: 10px 0;">
+            <h1 style="color: #1E88E5; margin-bottom: 0;">🌤️</h1>
+            <h2 style="color: #1E88E5; margin-top: 0;">Időjárás Dashboard</h2>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.divider()
+        
+        # Navigáció
+        st.subheader("📍 Navigáció")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🏠 Aktuális", use_container_width=True, 
+                        type="primary" if st.session_state.page == 'current' else "secondary"):
+                st.session_state.page = 'current'
+                st.rerun()
+        
+        with col2:
+            if st.button("📈 Előzmények", use_container_width=True,
+                        type="primary" if st.session_state.page == 'history' else "secondary"):
+                st.session_state.page = 'history'
+                st.rerun()
+        
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            if st.button("📊 Statisztikák", use_container_width=True,
+                        type="primary" if st.session_state.page == 'stats' else "secondary"):
+                st.session_state.page = 'stats'
+                st.rerun()
+        
+        with col4:
+            if st.button("🏙️ Összehasonlítás", use_container_width=True,
+                        type="primary" if st.session_state.page == 'comparison' else "secondary"):
+                st.session_state.page = 'comparison'
+                st.rerun()
+        
+        col5, col6 = st.columns(2)
+        
+        with col5:
+            if st.button("🌤️ 7 Napos", use_container_width=True,
+                        type="primary" if st.session_state.page == 'forecast' else "secondary"):
+                st.session_state.page = 'forecast'
+                st.rerun()
+        
+        with col6:
+            if st.button("⚙️ Beállítások", use_container_width=True,
+                        type="primary" if st.session_state.page == 'settings' else "secondary"):
+                st.session_state.page = 'settings'
+                st.rerun()
+        
+        st.divider()
+        
+        # Gyors műveletek
+        st.subheader("⚡ Gyors műveletek")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🗑️ Cache", use_container_width=True, help="Cache törlése"):
+                # Töröljük a cache-t
+                keys_to_delete = []
+                for key in st.session_state.keys():
+                    if key.startswith('current_') or key.startswith('forecast_') or key.startswith('quick_forecast_') or key.startswith('history_') or key.startswith('stats_') or key.startswith('comparison_'):
+                        keys_to_delete.append(key)
+                
+                for key in keys_to_delete:
+                    st.session_state.pop(key, None)
+                
+                st.success("✅ Cache törölve")
+                st.rerun()
+        
+        st.divider()
+        
+        # Információk
+        if 'last_refresh' in st.session_state:
+            st.caption(f"**Frissítve:** {st.session_state.last_refresh.strftime('%H:%M:%S')}")
+
+# ============================================
+# 5. KAPCSOLAT ELLENŐRZÉS
 # ============================================
 
 def check_backend_connection(api_client):
@@ -185,24 +306,17 @@ def display_welcome_screen(api_client):
             
             st.markdown("""
             **Hibaelhárítás:**
-            1. Ellenőrizd, hogy a backend fut-e: `http://localhost:8000`
-            2. Indítsd el a backendet: `cd backend && uvicorn main:app --reload`
-            3. Próbáld újra a kapcsolatot
+            1. Ellenőrizd, hogy a backend fut-e
+            2. Próbáld újra a kapcsolatot
             """)
             
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("🔄 Újrapróbálkozás", use_container_width=True):
-                    st.rerun()
-            with col2:
-                if st.button("⚙️ Beállítások", use_container_width=True):
-                    st.session_state.page = 'settings'
-                    st.rerun()
+            if st.button("🔄 Újrapróbálkozás", use_container_width=True):
+                st.rerun()
             
             return False
 
 # ============================================
-# 3. OLDAL ROUTING
+# 6. OLDAL ROUTING
 # ============================================
 
 def display_page(api_client):
@@ -216,23 +330,23 @@ def display_page(api_client):
     
     # Oldal routing
     if page == 'current':
-        current_page.display(api_client, config.DEFAULT_CITIES)
+        current_page.display(api_client, config.DEFAULT_CITIES if config else ["Budapest", "Debrecen", "Szeged"])
     elif page == 'history':
-        history_page.display(api_client, config.DEFAULT_CITIES)
+        history_page.display(api_client, config.DEFAULT_CITIES if config else ["Budapest", "Debrecen", "Szeged"])
     elif page == 'stats':
-        stats_page.display(api_client, config.DEFAULT_CITIES)
+        stats_page.display(api_client, config.DEFAULT_CITIES if config else ["Budapest", "Debrecen", "Szeged"])
     elif page == 'comparison':
-        comparison_page.display(api_client, config.DEFAULT_CITIES)
+        comparison_page.display(api_client, config.DEFAULT_CITIES if config else ["Budapest", "Debrecen", "Szeged"])
     elif page == 'forecast':
-        forecast_page.display(api_client, config.DEFAULT_CITIES)
+        forecast_page.display(api_client, config.DEFAULT_CITIES if config else ["Budapest", "Debrecen", "Szeged"])
     elif page == 'settings':
-        settings_page.display(api_client, config.DEFAULT_CITIES)
+        settings_page.display(api_client, config.DEFAULT_CITIES if config else ["Budapest", "Debrecen", "Szeged"])
     else:
         # Alapértelmezett
-        current_page.display(api_client, config.DEFAULT_CITIES)
+        current_page.display(api_client, config.DEFAULT_CITIES if config else ["Budapest", "Debrecen", "Szeged"])
 
 # ============================================
-# 4. FŐ ALKALMAZÁS
+# 7. FŐ ALKALMAZÁS
 # ============================================
 
 def main():
@@ -242,9 +356,13 @@ def main():
     init_session_state()
     
     # API kliens létrehozása
-    api_client = WeatherAPIClient(st.session_state.api_url)
+    try:
+        api_client = WeatherAPIClient(st.session_state.api_url)
+    except:
+        st.error("Nem sikerült létrehozni az API klienst")
+        return
     
-    # Oldalsáv megjelenítése
+    # Oldalsáv megjelenítése (inline)
     display_sidebar(api_client, config)
     
     # Oldal tartalom
@@ -255,7 +373,7 @@ def main():
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
-        st.caption("🌤️ Weather Dashboard v2.2 | Eszterházy Károly Katolikus Egyetem | Multi-paradigmás programozás")
+        st.caption("🌤️ Weather Dashboard | Eszterházy Károly Katolikus Egyetem | Multi-paradigmás programozás")
     
     with col2:
         if st.button("📚 API Dokumentáció", key="api_docs"):
@@ -266,7 +384,7 @@ def main():
             st.rerun()
 
 # ============================================
-# 5. INDÍTÁS
+# 8. INDÍTÁS
 # ============================================
 
 if __name__ == "__main__":

@@ -1,6 +1,8 @@
 """Időjárás előzmények oldal"""
 import streamlit as st
 import pandas as pd
+from components.charts import create_temperature_chart
+from utils import format_time
 
 def display(api_client, cities):
     """Időjárás előzmények megjelenítése"""
@@ -33,8 +35,7 @@ def display(api_client, cities):
         data = st.session_state[cache_key]
     
     if data and len(data) > 0:
-        from components.charts import create_temperature_chart
-        from utils import format_time
+
         
         # Diagram
         fig = create_temperature_chart(data, chart_type)
