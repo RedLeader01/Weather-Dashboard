@@ -1,8 +1,8 @@
-# 🌤️ Weather Dashboard v2.1
+# 🌤️ Weather Dashboard v2.2
 
 Egy teljes értékű időjárás dashboard mikroszerviz architektúrával, 7 napos előrejelzéssel.
 
-## 📋 Újdonságok v2.1
+## 📋 Újdonságok v2.2
 
 ### 🌤️ 7 Napos Időjárás Előrejelzés
 - **Napi előrejelzés kártyák**: Minden nap külön kártyán
