@@ -18,7 +18,7 @@ class Config:
     
     # Alkalmazás beállítások
     SCHEDULE_INTERVAL = int(os.getenv("SCHEDULE_INTERVAL", 30))  # perc
-    DEFAULT_CITIES = os.getenv("DEFAULT_CITIES", "Budapest,Debrecen,Szeged,Pécs,Győr").split(",")
+    DEFAULT_CITIES = os.getenv("DEFAULT_CITIES", "Budapest,Debrecen,Szeged,Pécs,Győr,Miskolc,Nyíregyháza").split(",")
     
     # CORS beállítások
     FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8501")
